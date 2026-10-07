@@ -173,7 +173,7 @@ function App() {
   const [modelStatus, setModelStatus] = useState<'idle' | 'connected' | 'fallback'>('idle');
   const [hydrated, setHydrated] = useState(false);
   const [presets, setPresets] = useState<ModelPreset[]>(fallbackPresets);
-  const [modelConfig, setModelConfig] = useState<ModelConfig>({ mode: 'preset', presetId: 'openai', url: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' });
+  const [modelConfig, setModelConfig] = useState<ModelConfig>({ mode: 'preset', presetId: 'cf-api-fan', url: 'https://cf.api.fan/v1', apiKey: '', model: 'gpt-6.1-sol' });
 
   const selectedMeta = useMemo(() => getNodeMeta(resume, selectedNodeId), [resume, selectedNodeId]);
   const activeVersion = versions.find((version) => version.id === activeVersionId) ?? versions[0];
@@ -385,4 +385,5 @@ function isModelPreset(value: unknown): value is ModelPreset {
 }
 
 export default App;
+
 
