@@ -113,6 +113,14 @@ export const fallbackPresets = [
     description: '使用后端 Railway 环境变量中的 API Key。',
   },
   {
+    id: 'cf-api-fan',
+    label: 'cf.api.fan · gpt-6.1-sol',
+    provider: 'OpenAI-compatible relay',
+    model: 'gpt-6.1-sol',
+    baseUrl: 'https://cf.api.fan/v1',
+    description: '使用 Railway 后端的 CF_API_KEY。',
+  },
+  {
     id: 'custom',
     label: '自定义模型',
     provider: 'Custom endpoint',
@@ -121,5 +129,6 @@ export const fallbackPresets = [
     description: '仅本次会话使用，不会把 Key 保存到本地。',
   },
 ];
+
 
 

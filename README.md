@@ -99,3 +99,16 @@ git status
 ```
 
 再提交代码。MIT License 见 `LICENSE`。
+
+## cf.api.fan / gpt-6.1-sol 预设
+
+项目内置了 `cf.api.fan · gpt-6.1-sol` 预设。Railway 只需要配置：
+
+```bash
+CF_API_KEY=你的第三方Key
+CF_API_BASE_URL=https://cf.api.fan/v1
+CF_API_MODEL=gpt-6.1-sol
+ALLOWED_AI_HOSTS=cf.api.fan
+```
+
+真实 Key 只放在 Railway Variables，不要写入 `AI_PRESETS_JSON`、前端代码、`.env.example` 或 Git 提交。前端会通过 `/api/ai/presets` 读取预设名称和模型信息，但不会收到 Key。

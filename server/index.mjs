@@ -23,6 +23,7 @@ app.use(express.json({ limit: '2mb' }));
 const builtInPresets = [
   { id: 'openai', label: 'OpenAI', provider: 'OpenAI-compatible', baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1', model: process.env.OPENAI_MODEL || 'gpt-4o-mini', keyEnv: 'OPENAI_API_KEY', description: 'Railway 环境变量：OPENAI_API_KEY' },
   { id: 'deepseek', label: 'DeepSeek', provider: 'OpenAI-compatible', baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1', model: process.env.DEEPSEEK_MODEL || 'deepseek-chat', keyEnv: 'DEEPSEEK_API_KEY', description: 'Railway 环境变量：DEEPSEEK_API_KEY' },
+  { id: 'cf-api-fan', label: 'cf.api.fan · gpt-6.1-sol', provider: 'OpenAI-compatible relay', baseUrl: process.env.CF_API_BASE_URL || 'https://cf.api.fan/v1', model: process.env.CF_API_MODEL || 'gpt-6.1-sol', keyEnv: 'CF_API_KEY', description: 'Railway 环境变量：CF_API_KEY' },
 ];
 
 function getPresetDefinitions() {
@@ -161,4 +162,5 @@ if (fs.existsSync(distDir)) {
 }
 
 app.listen(port, () => console.log(`folio-atelier server listening on ${port}`));
+
 
