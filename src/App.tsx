@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Check, Code2, Download, FileText, History, Home, LayoutTemplate, Maximize2, Minus, MoreHorizontal, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Send, Settings2, ShieldCheck, Sparkles, Target, Undo2, WandSparkles, X, RefreshCcw } from 'lucide-react';
+import { Check, Code2, Download, FileText, Maximize2, Minus, MoreHorizontal, MousePointer2, Plus, Redo2, Send, Settings2, Sparkles, Undo2, WandSparkles, X, RefreshCcw } from 'lucide-react';
 import { initialResume, fallbackPresets } from './data';
 import { resumeSchema } from '../shared/contracts';
 import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL } from '../shared/modelOptions';
@@ -12,6 +12,8 @@ import { requestGeneration } from './lib/generation';
 
 import { ResumePreview } from './components/ResumePreview';
 import { LandingPage } from './components/LandingPage';
+import { Sidebar } from './components/Sidebar';
+import { DeleteVersionDialog } from './components/DeleteVersionDialog';
 import { Inspector } from './components/Inspector';
 import { ModelSettings } from './components/ModelSettings';
 import { MatchPage, HistoryPage } from './components/VersionPages';
@@ -23,7 +25,7 @@ export default function App(){
   const stateRef=useRef(state);
   useEffect(()=>{stateRef.current=state;},[state]);
   const [hydrated,setHydrated]=useState(false);const [view,setView]=useState<View>('home');
-  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem('folio-sidebar')==='collapsed');
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem('folio-sidebar')!=='expanded');
   const [scale,setScale]=useState(.85);const [fullscreen,setFullscreen]=useState(false);
   const [selectedId,setSelectedId]=useState<string|null>(null);const [chat,setChat]=useState('');
   const [pending,setPending]=useState<{patch:EditPatch;versionId:string;before:ResumeData}|null>(null);
@@ -34,10 +36,12 @@ export default function App(){
   const [profileText,setProfileText]=useState('');const [jobText,setJobText]=useState('');
   const [profileMaterial,setProfileMaterial]=useState<ParsedMaterial|null>(null);const [jobMaterial,setJobMaterial]=useState<ParsedMaterial|null>(null);
   const [photo,setPhoto]=useState('');const [consent,setConsent]=useState(false);
+  const [deleteTargetId,setDeleteTargetId]=useState<string|null>(null);
   const [showModels,setShowModels]=useState(false);const [presets,setPresets]=useState<ModelPreset[]>(fallbackPresets);
   const [config,setConfig]=useState<ModelConfig>({mode:'preset',presetId:AUTHOR_PRESET_ID,url:'',apiKey:'',model:''});
   const [draftConfig,setDraftConfig]=useState(config);
   const active=state.versions.find(v=>v.id===state.activeVersionId)??null;
+  const deleteTarget=state.versions.find(version=>version.id===deleteTargetId)??null;
   const selection=useMemo(()=>active&&selectedId?getNodeMeta(active.resume,selectedId):null,[active,selectedId]);
   useEffect(()=>{void loadWorkspace<unknown>().then(raw=>{dispatch({type:'hydrate',state:migrateWorkspace(raw)});setHydrated(true);}).catch(()=>{setError('本地资料读取失败，请不要清空浏览器数据。');setHydrated(true);});},[]);
   useEffect(()=>{
@@ -46,12 +50,12 @@ export default function App(){
   },[state,hydrated]);
   useEffect(()=>{localStorage.setItem('folio-sidebar',sidebarCollapsed?'collapsed':'expanded');},[sidebarCollapsed]);
   useEffect(()=>{const controller=new AbortController();void fetch('/api/ai/presets',{signal:controller.signal}).then(r=>r.ok?r.json():null).then((data:unknown)=>{if(!Array.isArray(data))return;const author=data.find(item=>isModelPreset(item)&&item.id===AUTHOR_PRESET_ID);if(!isModelPreset(author))return;setPresets([{...author,label:AUTHOR_PRESET_LABEL}]);}).catch(()=>undefined);return()=>controller.abort();},[]);
-  useEffect(()=>{const handler=(e:KeyboardEvent)=>{if(e.key==='Escape'){setFullscreen(false);setShowModels(false);}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);},[]);
-  useEffect(()=>{if(!fullscreen)return;const old=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.body.style.overflow=old;};},[fullscreen]);
+  useEffect(()=>{const handler=(e:KeyboardEvent)=>{if(e.key==='Escape'){setFullscreen(false);setShowModels(false);setDeleteTargetId(null);if(window.matchMedia('(max-width:930px)').matches)setSidebarCollapsed(true);}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);},[]);
+  useEffect(()=>{if(!fullscreen&&!deleteTarget)return;const old=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.body.style.overflow=old;};},[fullscreen,deleteTarget]);
   useEffect(()=>()=>editController.current?.abort(),[]);
   function openModels(){setDraftConfig({...config});setShowModels(true);}
   function navigate(next:View){setFullscreen(false);setError('');if(next!=='home'&&!active){setView('home');return;}setView(next);}
-  function selectVersion(id:string){editController.current?.abort();setEditing(false);dispatch({type:'switch',id});setPending(null);setSelectedId(null);setChat('');setError('');setFullscreen(false);setView('workspace');}
+  function selectVersion(id:string){if(window.matchMedia('(max-width:930px)').matches)setSidebarCollapsed(true);editController.current?.abort();setEditing(false);dispatch({type:'switch',id});setPending(null);setSelectedId(null);setChat('');setError('');setFullscreen(false);setView('workspace');}
   function commit(resume:ResumeData,label:string,source:'manual'|'ai'|'restore'='manual'){
     if(!active)return;const parsed=resumeSchema.safeParse(resume);if(!parsed.success){setError('内容或样式超出限制（姓名不能为空），请检查后保存。');return;}
     dispatch({type:'commit',id:active.id,resume:parsed.data,label,source});setPending(null);setError('');
@@ -85,11 +89,22 @@ export default function App(){
   function apply(){if(!pending||!active||pending.versionId!==active.id)return;if(JSON.stringify(pending.before)!==JSON.stringify(active.resume)){setError('简历已变动，请重新请求AI修改。');setPending(null);return;}try{commit(applyPatch(active.resume,pending.patch),pending.patch.preview,'ai');}catch(e){setError(errorText(e));}}
   function duplicate(){if(!active)return;const version=makeVersion({resume:active.resume,jobTitle:active.role,report:active.report??{summary:'尚未分析岗位',requirements:[]},warnings:active.warnings},{jobText:active.jobText,isDemo:active.isDemo,profileFileName:active.profileFileName,jobFileName:active.jobFileName});version.title=`${active.title} · 副本`;addVersion(version);}
   async function pdf(){if(!active)return;try{await (await import('./lib/export')).printResume(active.resume);}catch(e){setError(errorText(e));}}
+  function confirmDelete(){
+    const id=deleteTargetId;
+    if(!id||!stateRef.current.versions.some(version=>version.id===id)){setDeleteTargetId(null);return;}
+    const removingActive=stateRef.current.activeVersionId===id;
+    if(removingActive){editController.current?.abort();setEditing(false);setPending(null);setSelectedId(null);setChat('');setFullscreen(false);}
+    if(stateRef.current.versions.length===1)setView('home');
+    dispatch({type:'delete',id});setDeleteTargetId(null);setError('');
+  }
+  function backupVersions(){const url=URL.createObjectURL(new Blob([JSON.stringify(state)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='folio-versions-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  const isHome=view==='home'||!active;
+  const sidebar=<Sidebar view={isHome?'home':view} collapsed={sidebarCollapsed} versions={state.versions} activeVersionId={state.activeVersionId} busy={!hydrated||generating||reading} onToggle={()=>setSidebarCollapsed(value=>!value)} onNavigate={next=>{navigate(next);if(window.matchMedia('(max-width:930px)').matches)setSidebarCollapsed(true);}} onSelect={selectVersion} onDelete={setDeleteTargetId} onBackup={backupVersions}/>;
+  const deleteDialog=deleteTarget?<DeleteVersionDialog version={deleteTarget} onCancel={()=>setDeleteTargetId(null)} onConfirm={confirmDelete}/>:null;
+  const sidebarScrim=!sidebarCollapsed?<button className="sidebar-scrim" aria-label="收起侧边栏背景" onClick={()=>setSidebarCollapsed(true)}/>:null;
   const modal=showModels?<ModelSettings config={draftConfig} presets={presets} onChange={setDraftConfig} onClose={()=>setShowModels(false)} onSave={()=>{setConfig({...draftConfig});setShowModels(false);}}/>:null;
-  if(view==='home'||!active)return <><LandingPage profileText={profileText} jobText={jobText} profileMaterial={profileMaterial} jobMaterial={jobMaterial} onProfile={setProfileText} onJob={setJobText} onFile={(kind,file)=>void readFile(kind,file)} onPhoto={file=>void readPhoto(file)} photo={photo} busy={generating||!hydrated} reading={reading} consent={consent} onConsent={setConsent} error={error} onStart={()=>void generate()} onDemo={demo} onModels={openModels} onResume={active?()=>navigate('workspace'):undefined}/>{modal}</>;
-  return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}><aside className="side-rail"><div className="brand-lockup"><div className="brand-mark">f/a</div><div className="brand-copy"><strong>folio</strong><span>atelier</span></div></div><button className="sidebar-toggle" aria-label={sidebarCollapsed?'展开侧边栏':'收起侧边栏'} title={sidebarCollapsed?'展开侧边栏':'收起侧边栏'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={16}/>:<PanelLeftClose size={16}/>}</button><div className="rail-caption">RESUME STUDIO</div><nav className="rail-nav" aria-label="工作台导航">
-    {([{id:'home',label:'工具介绍 / 新建简历',Icon:Home},{id:'workspace',label:'简历工作台',Icon:LayoutTemplate},{id:'match',label:'岗位匹配',Icon:Target},{id:'history',label:'修改历史',Icon:History}] as const).map(item=><button key={item.id} className={`rail-nav-item ${view===item.id?'active':''}`} aria-label={item.label} title={item.label} onClick={()=>navigate(item.id)}><item.Icon size={16}/><span>{item.label}</span></button>)}
-  </nav><div className="version-block"><div className="section-label-row"><span>我的版本 · {state.versions.length}</span><button aria-label="新建岗位简历" className="quiet-icon" onClick={()=>navigate('home')}><Plus size={15}/></button></div><div className="version-list">{state.versions.map(v=><button data-version-id={v.id} key={v.id} className={`version-item ${active.id===v.id?'active':''}`} onClick={()=>selectVersion(v.id)}><span className="version-dot" style={{background:v.accent}}/><span className="version-copy"><strong>{v.title}</strong><small>{v.isDemo?'示例 · ':''}{new Date(v.updatedAt).toLocaleDateString('zh-CN')}</small></span></button>)}</div><button className="rail-backup" onClick={()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(state)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='folio-versions-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>下载全部版本备份</button></div><div className="rail-bottom"><div className="privacy-card"><ShieldCheck size={15}/><span>版本只保存在本浏览器<br/><small>下载备份避免清理后丢失</small></span></div></div></aside>
+  if(isHome)return <div className={`app-shell home-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>{sidebar}<div className="app-main home-main"><LandingPage profileText={profileText} jobText={jobText} profileMaterial={profileMaterial} jobMaterial={jobMaterial} onProfile={setProfileText} onJob={setJobText} onFile={(kind,file)=>void readFile(kind,file)} onPhoto={file=>void readPhoto(file)} photo={photo} busy={generating||!hydrated} reading={reading} consent={consent} onConsent={setConsent} error={error} onStart={()=>void generate()} onDemo={demo} onModels={openModels} onOpenSidebar={()=>setSidebarCollapsed(false)} versionCount={state.versions.length} sidebarExpanded={!sidebarCollapsed}/></div>{sidebarScrim}{modal}{deleteDialog}</div>;
+  return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>{sidebar}
   <main className="app-main"><header className="topbar"><div className="breadcrumbs"><select aria-label="选择简历版本" className="version-select" value={active.id} onChange={e=>selectVersion(e.target.value)}>{state.versions.map(v=><option key={v.id} value={v.id}>{v.title}</option>)}</select></div><div className="topbar-actions"><span className="save-state"><span className="save-dot"/>{saveStatus}</span><button className="icon-button" aria-label="撤销" disabled={!active.past.length} onClick={()=>{dispatch({type:'undo',id:active.id});setPending(null);}}><Undo2 size={16}/></button><button className="icon-button" aria-label="重做" disabled={!active.future.length} onClick={()=>{dispatch({type:'redo',id:active.id});setPending(null);}}><Redo2 size={16}/></button><button className="model-status-button" onClick={openModels}><Settings2 size={15}/>AI 模型</button><div className="export-actions"><button className="outline-button" onClick={()=>void import('./lib/export').then(exporter=>exporter.downloadResume(active.resume)).catch(e=>setError(errorText(e)))}><Download size={15}/>导出 HTML</button><button className="outline-button" onClick={()=>void pdf()}><FileText size={15}/>导出 PDF</button></div></div></header>
   {error&&<div className="workspace-alert" role="alert">{error}<button aria-label="关闭提示" onClick={()=>setError('')}><X size={14}/></button></div>}
   {view==='match'&&<MatchPage version={active} onBack={()=>navigate('workspace')}/>}
@@ -105,7 +120,7 @@ export default function App(){
   <div className={`preview-column ${fullscreen?'is-fullscreen':''}`} role={fullscreen?'dialog':undefined} aria-modal={fullscreen||undefined} aria-label={fullscreen?'放大简历预览':undefined}><div className="preview-toolbar"><div><span className="panel-kicker">A4 CANVAS</span><strong>实时预览</strong></div><div className="preview-tools"><button className="zoom-step" aria-label="缩小预览" onClick={()=>setScale(v=>Math.max(.3,Number((v-.05).toFixed(2))))}><Minus size={13}/></button><input className="zoom-range" type="range" min=".3" max="1.5" step=".05" value={scale} onChange={e=>setScale(Number(e.target.value))} aria-label="预览缩放"/><span className="zoom-label">{Math.round(scale*100)}%</span><button className="zoom-step" aria-label="放大预览" onClick={()=>setScale(v=>Math.min(1.5,Number((v+.05).toFixed(2))))}><Plus size={13}/></button><button className="icon-button" aria-label={fullscreen?'退出全屏预览':'全屏预览'} onClick={()=>setFullscreen(v=>!v)}>{fullscreen?<X size={16}/>:<Maximize2 size={16}/>}</button></div></div><div className="preview-stage"><ResumePreview resume={active.resume} selectedNodeId={selectedId??''} onSelect={id=>{editController.current?.abort();setEditing(false);setPending(null);setSelectedId(id);}} scale={scale}/></div><div className="preview-footer"><small>缩放只影响屏幕，导出使用真实A4尺寸。PDF通过打印窗口选择“另存为PDF”。</small></div></div>
   {selection?<Inspector key={selection.id+selection.content} resume={active.resume} selection={selection} onContent={value=>commit(updateContent(active.resume,selection.id,value),`修改${selection.label}`)} onStyle={(key,value)=>{const next=cloneResume(active.resume);if(key==='avatarShape')next.design.avatarShape=value==='circle'?'circle':'square';else next.nodeStyles[selection.id]={...next.nodeStyles[selection.id],[key]:value};commit(next,`调整${selection.label}样式`);}} onCode={()=>setChat(`当前组件样式：\n${selection.code}\n\n我的修改要求：`)} onPhoto={file=>void readPhoto(file,true)}/>:<aside className="insight-column"><div className="insight-heading"><h2>选择器</h2></div><div className="empty-inspector"><MousePointer2 size={28}/><h3>选择要修改的区块</h3><p>点击简历中的姓名、项目、经历或技能，即可修改内容、颜色、字号和间距。</p></div></aside>}
   </section></>}
-  </main>{fullscreen&&<button className="fullscreen-scrim" aria-label="关闭全屏背景" onClick={()=>setFullscreen(false)}/ >}{modal}</div>;
+  </main>{fullscreen&&<button className="fullscreen-scrim" aria-label="关闭全屏背景" onClick={()=>setFullscreen(false)}/ >}{sidebarScrim}{modal}{deleteDialog}</div>;
 }
 function errorText(error:unknown){return error instanceof Error?error.message:'操作失败，请检查设置后重试。';}
 function isModelPreset(value:unknown):value is ModelPreset{if(typeof value!=='object'||!value)return false;const v=value as Record<string,unknown>;return ['id','label','provider','model','baseUrl','description'].every(key=>typeof v[key]==='string');}

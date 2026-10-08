@@ -34,3 +34,23 @@ test('patches reject wrong target, style injection and font overflow',()=>{
   assert.throws(()=>applyPatch(initialResume,{...patch,value:'url(https://evil)'}));
   assert.throws(()=>applyPatch(initialResume,{...patch,path:'style.fontSize',value:9999}));
 });
+
+test('deleting a non-active version preserves the active document and its history',()=>{
+  const a=makeVersion(result),b=makeVersion(result);
+  let state=workspaceReducer(emptyWorkspace,{type:'add',version:a});state=workspaceReducer(state,{type:'add',version:b});
+  state=workspaceReducer(state,{type:'commit',id:b.id,resume:{...b.resume,name:'保留内容'},label:'姓名',source:'manual'});
+  const survivor=state.versions.find(v=>v.id===b.id)!;
+  state=workspaceReducer(state,{type:'delete',id:a.id});
+  assert.equal(state.versions.length,1);assert.equal(state.activeVersionId,b.id);assert.equal(state.versions[0],survivor);
+  assert.equal(state.versions[0].history.length,1);assert.equal(state.versions[0].resume.name,'保留内容');
+  const reloaded=migrateWorkspace(JSON.parse(JSON.stringify(state)));assert.equal(reloaded.versions.length,1);assert.equal(reloaded.activeVersionId,b.id);
+});
+
+test('deleting active version chooses a surviving version and deleting all empties the workspace',()=>{
+  const a=makeVersion(result),b=makeVersion(result);
+  let state=workspaceReducer(emptyWorkspace,{type:'add',version:a});state=workspaceReducer(state,{type:'add',version:b});
+  state=workspaceReducer(state,{type:'delete',id:b.id});assert.equal(state.activeVersionId,a.id);
+  state=workspaceReducer(state,{type:'delete',id:a.id});assert.deepEqual(state,emptyWorkspace);
+  assert.deepEqual(migrateWorkspace(JSON.parse(JSON.stringify(state))),emptyWorkspace);
+  assert.equal(workspaceReducer(state,{type:'delete',id:'unknown'}),state);
+});

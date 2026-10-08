@@ -48,7 +48,7 @@ test('versions switch actual content, preserve separate undo/history, and reload
   await page.getByRole('button',{name:'岗位匹配',exact:true}).click();await expect(page.locator('.match-page')).toContainText('项目使用Python');
   await page.getByRole('button',{name:'修改历史',exact:true}).click();await expect(page.locator('.history-list')).toContainText('修改姓名');
   await page.getByRole('button',{name:'恢复到此修改之后'}).first().click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨（第二版）');
-  await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'继续编辑已保存版本'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨（第二版）');expect(errors).toEqual([]);
+  await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();await page.locator(`.version-item[data-version-id="${second}"]`).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨（第二版）');expect(errors).toEqual([]);
 });
 
 test('sidebar, zoom, full screen, exports and selection are real controls',async({page})=>{
@@ -164,4 +164,84 @@ test('custom connection failure preserves materials and never falls back to the 
   await dialog.getByLabel('完整 URL',{exact:false}).fill('https://failure.example/v1');await dialog.getByLabel('模型名称',{exact:true}).fill('own-model');await dialog.getByLabel('API Key',{exact:false}).fill('test-user-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
   await page.locator('.intake-card textarea').nth(0).fill('保留的个人资料');await page.locator('.intake-card textarea').nth(1).fill('保留的岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
   await expect(page.getByRole('alert')).toContainText('CORS');await expect(page.getByRole('alert')).toContainText('不会自动转发');await expect(page.locator('.intake-card textarea').first()).toHaveValue('保留的个人资料');expect(backendRequests).toBe(0);await expect(page.locator('.resume-paper')).toHaveCount(0);
+});
+
+test('home opens the saved-version sidebar directly without a separate continue-editing button',async({page})=>{
+  await page.goto('/');await generate(page);
+  const versionId=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'工具介绍 / 新建简历',exact:true}).click();
+  await expect(page.locator('.landing-hero')).toBeVisible();
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.getByRole('button',{name:'继续编辑已保存版本'})).toHaveCount(0);
+  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await expect(page.locator('.side-rail .version-list')).toBeVisible();
+  await page.locator(`.version-item[data-version-id="${versionId}"]`).click();
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+});
+
+test('version deletion requires confirmation, keeps other versions, and persists after reload',async({page})=>{
+  await page.goto('/');await generate(page);
+  const originalId=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'复制当前版本',exact:true}).click();
+  const copyId=await page.locator('.version-select').inputValue();
+  await page.getByRole('textbox',{name:'版本名称',exact:true}).fill('要保留的副本');
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
+  await page.locator(`.version-row[data-version-id="${originalId}"]`).getByRole('button',{name:/删除版本/}).click();
+  const confirm=page.getByRole('alertdialog',{name:'删除简历版本'});
+  await expect(confirm).toContainText('张雨 · 数据分析师');
+  await confirm.getByRole('button',{name:'取消',exact:true}).click();
+  await expect(page.locator('.version-item')).toHaveCount(2);
+  await expect(page.locator('.version-select')).toHaveValue(copyId);
+  await page.locator(`.version-row[data-version-id="${originalId}"]`).getByRole('button',{name:/删除版本/}).click();
+  await confirm.getByRole('button',{name:'确认删除',exact:true}).click();
+  await expect(page.locator('.version-item')).toHaveCount(1);
+  await expect(page.locator('.version-select')).toHaveValue(copyId);
+  await expect(page.locator('.save-state')).toHaveText('已本地保存');
+  await page.reload();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await expect(page.locator(`.version-item[data-version-id="${originalId}"]`)).toHaveCount(0);
+  await page.locator(`.version-item[data-version-id="${copyId}"]`).click();
+  await expect(page.locator('input[aria-label="版本名称"]')).toHaveValue('要保留的副本');
+});
+
+test('deleting the active and last version selects a survivor then returns to empty home',async({page})=>{
+  await page.goto('/');await generate(page);const first=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'复制当前版本',exact:true}).click();const second=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
+  await page.locator(`.version-row[data-version-id="${second}"]`).getByRole('button',{name:/删除版本/}).click();
+  await page.getByRole('alertdialog',{name:'删除简历版本'}).getByRole('button',{name:'确认删除'}).click();
+  await expect(page.locator('.version-select')).toHaveValue(first);await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  await page.locator(`.version-row[data-version-id="${first}"]`).getByRole('button',{name:/删除版本/}).click();
+  await page.getByRole('alertdialog',{name:'删除简历版本'}).getByRole('button',{name:'确认删除'}).click();
+  await expect(page.locator('.landing-hero')).toBeVisible();await expect(page.locator('.version-item')).toHaveCount(0);await expect(page.locator('.side-rail')).toContainText('还没有保存的简历');
+});
+
+test('saved versions can be opened and deleted from the home sidebar on a phone',async({page})=>{
+  await page.setViewportSize({width:390,height:844});await page.goto('/');await generate(page);const id=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'工具介绍 / 新建简历',exact:true}).click();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await expect(page.locator('.version-item')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
+  await page.locator(`.version-item[data-version-id="${id}"]`).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();await page.locator(`.version-row[data-version-id="${id}"]`).getByRole('button',{name:/删除版本/}).click();
+  await page.getByRole('alertdialog',{name:'删除简历版本'}).getByRole('button',{name:'确认删除'}).click();await expect(page.locator('.landing-hero')).toBeVisible();
+});
+
+test('Escape cancels deletion and a late AI edit cannot restore a removed version',async({page})=>{
+  let release=()=>{};let editRequested=false;
+  await page.route('**/api/ai/edit',async route=>{
+    editRequested=true;await new Promise<void>(resolve=>{release=resolve;});
+    await route.fulfill({json:{patch:{id:'late-edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'迟到建议',preview:'不应应用的修改',requiresConfirmation:false}}}).catch(()=>undefined);
+  });
+  await page.goto('/');await generate(page);const first=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'复制当前版本',exact:true}).click();const second=await page.locator('.version-select').inputValue();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
+  const remove=page.locator(`.version-row[data-version-id="${second}"]`).getByRole('button',{name:/删除版本/});
+  await remove.click();const dialog=page.getByRole('alertdialog',{name:'删除简历版本'});
+  await expect(dialog.getByRole('button',{name:'取消',exact:true})).toBeFocused();
+  await page.keyboard.press('Tab');await expect(dialog.getByRole('button',{name:'确认删除'})).toBeFocused();
+  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.locator('.version-select')).toHaveValue(second);
+  await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('改姓名颜色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect.poll(()=>editRequested).toBe(true);
+  try{
+    await remove.click();await dialog.getByRole('button',{name:'确认删除',exact:true}).click();await expect(page.locator('.version-select')).toHaveValue(first);
+  }finally{release();}
+  await expect(page.locator('.version-item')).toHaveCount(1);await expect(page.locator('.patch-card')).toHaveCount(0);await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(25, 59, 53)');
+  await expect(page.getByRole('textbox',{name:'AI修改要求'})).toHaveValue('');
 });

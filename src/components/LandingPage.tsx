@@ -4,11 +4,11 @@ type Props = {
   profileText:string;jobText:string;profileMaterial:ParsedMaterial|null;jobMaterial:ParsedMaterial|null;
   onProfile:(value:string)=>void;onJob:(value:string)=>void;onFile:(kind:'profile'|'job',file:File)=>void;
   onPhoto:(file:File)=>void;photo:string;busy:boolean;reading:boolean;error:string;consent:boolean;onConsent:(value:boolean)=>void;
-  onStart:()=>void;onDemo:()=>void;onModels:()=>void;onResume?:()=>void;
+  onStart:()=>void;onDemo:()=>void;onModels:()=>void;onOpenSidebar:()=>void;versionCount:number;sidebarExpanded:boolean;
 };
 export function LandingPage(p:Props){
   const ready=Boolean((p.profileText.trim()||p.profileMaterial?.text||p.profileMaterial?.image) && (p.jobText.trim()||p.jobMaterial?.text||p.jobMaterial?.image));
-  return <div className="landing-shell"><header className="landing-topbar"><div className="brand-lockup landing-brand"><div className="brand-mark">f/a</div><div><strong>folio</strong><span>atelier</span></div></div><div className="landing-header-actions"><span className="landing-topnote"><ShieldCheck size={14}/>本地保存 · 按需AI处理</span><button className="outline-button" onClick={p.onModels}><Settings2 size={15}/> AI 模型</button>{p.onResume&&<button className="outline-button" onClick={p.onResume}>继续编辑已保存版本</button>}</div></header>
+  return <div className="landing-shell"><header className="landing-topbar"><div className="brand-lockup landing-brand"><div className="brand-mark">f/a</div><div><strong>folio</strong><span>atelier</span></div></div><div className="landing-header-actions"><span className="landing-topnote"><ShieldCheck size={14}/>本地保存 · 按需AI处理</span><button className="outline-button" onClick={p.onModels}><Settings2 size={15}/> AI 模型</button><button className="outline-button home-versions-button" aria-label="打开版本侧边栏" aria-expanded={p.sidebarExpanded} aria-controls="sidebar-versions" onClick={p.onOpenSidebar}><LayoutTemplate size={15}/>我的简历 <span className="home-version-count">{p.versionCount}</span></button></div></header>
   <main className="landing-main"><section className="landing-hero"><div className="eyebrow-ui"><Sparkles size={14}/> AI RESUME STUDIO</div><h1>一份经历，<br/><em>不同岗位的答案。</em></h1><p>folio atelier 帮你整理个人资料、对照岗位要求，生成可编辑的简历。每个岗位拥有独立版本；生成后可选中区块，让 AI 改写或调整样式，最后下载 HTML 或打印为 PDF。</p><div className="landing-hero-meta"><span>01 · 提供个人资料</span><span>02 · 提供岗位要求</span><span>03 · AI生成并继续编辑</span></div></section>
   <section className="intake-grid">{(['profile','job'] as const).map(kind=>{
     const profile=kind==='profile';const material=profile?p.profileMaterial:p.jobMaterial;

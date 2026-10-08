@@ -20,6 +20,7 @@ export type WorkspaceAction =
   | { type: 'hydrate'; state: WorkspaceState }
   | { type: 'add'; version: ResumeVersion }
   | { type: 'switch'; id: string }
+  | { type: 'delete'; id: string }
   | { type: 'rename'; id: string; title: string }
   | { type: 'commit'; id: string; resume: ResumeData; label: string; source: 'manual' | 'ai' | 'restore' }
   | { type: 'undo' | 'redo'; id: string }
@@ -28,6 +29,12 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
   if (action.type === 'hydrate') return action.state;
   if (action.type === 'add') return { ...state, activeVersionId: action.version.id, versions: [action.version, ...state.versions] };
   if (action.type === 'switch') return state.versions.some(v => v.id === action.id) ? { ...state, activeVersionId: action.id } : state;
+  if (action.type === 'delete') {
+    if (!state.versions.some(version => version.id === action.id)) return state;
+    const versions = state.versions.filter(version => version.id !== action.id);
+    const activeVersionId = versions.some(version => version.id === state.activeVersionId) ? state.activeVersionId : versions[0]?.id ?? null;
+    return { ...state, versions, activeVersionId };
+  }
   return { ...state, versions: state.versions.map(version => {
     if (version.id !== action.id) return version;
     if (action.type === 'rename') return { ...version, title: action.title.trim() || version.title };
