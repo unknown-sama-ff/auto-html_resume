@@ -97,3 +97,61 @@ test('exported HTML matches the styled preview and PDF prints that same standalo
   await page.addInitScript(()=>{window.print=()=>{document.documentElement.dataset.printCalled='yes';};});
   await page.getByRole('button',{name:'导出 PDF',exact:true}).click();const frame=page.frameLocator('iframe[title="简历打印预览"]');await expect(frame.locator('.resume-paper h1')).toHaveText('张雨');await expect(frame.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');await expect(frame.locator('.resume-paper')).toHaveCSS('transform','none');
 });
+
+test('AI settings expose exactly the author preset and custom URL, even with old preset metadata',async({page})=>{
+  await page.route('**/api/ai/presets',route=>route.fulfill({json:[
+    {id:'openai',label:'OpenAI',provider:'OpenAI-compatible',model:'old-model',baseUrl:'https://api.openai.com/v1',description:'旧版'},
+    {id:'deepseek',label:'DeepSeek',provider:'OpenAI-compatible',model:'deepseek-chat',baseUrl:'https://api.deepseek.com/v1',description:'旧版'},
+    {id:'cf-api-fan',label:'Relay',provider:'OpenAI-compatible',model:'gpt-6.1-sol',baseUrl:'https://cf.api.fan/v1',description:'后端预设'},
+  ]}));
+  await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'AI 模型设置'});
+  await expect(dialog.locator('.model-mode-tabs button')).toHaveText(['作者预设6.1-sol','自定义URL']);
+  await expect(dialog.locator('.preset-item')).toHaveCount(0);
+  await expect(dialog).not.toContainText('DeepSeek');await expect(dialog).not.toContainText('READY');
+  await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
+  await expect(dialog.getByLabel('完整 URL',{exact:false})).toBeVisible();
+  await expect(dialog.getByLabel('模型名称',{exact:true})).toBeVisible();
+  await expect(dialog.getByLabel('API Key',{exact:false})).toBeVisible();
+});
+
+test('custom URL fields survive mode toggles; cancel leaves the author default active',async({page})=>{
+  let received:Record<string,unknown>={};
+  await page.route('**/api/ai/generate',route=>{received=route.request().postDataJSON().config;return route.fulfill({json:makeResult()});});
+  await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'AI 模型设置'});
+  await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
+  await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1');
+  await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');
+  await dialog.getByLabel('API Key',{exact:false}).fill('test-key');
+  await dialog.getByRole('button',{name:'作者预设6.1-sol',exact:true}).click();
+  await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
+  await expect(dialog.getByLabel('完整 URL',{exact:false})).toHaveValue('https://api.example.com/v1');
+  await expect(dialog.getByLabel('API Key',{exact:false})).toHaveValue('test-key');
+  await dialog.getByRole('button',{name:'取消',exact:true}).click();
+  await page.locator('.intake-card textarea').nth(0).fill('姓名：张雨');await page.locator('.intake-card textarea').nth(1).fill('岗位：数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(received.mode).toBe('preset');expect(received.presetId).toBe('cf-api-fan');expect(received).not.toHaveProperty('apiKey');
+});
+
+test('saving custom URL sends the entered config without persisting its Key with resume data',async({page})=>{
+  let received:Record<string,unknown>={};
+  await page.route('**/api/ai/generate',route=>{received=route.request().postDataJSON().config;return route.fulfill({json:makeResult()});});
+  await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'AI 模型设置'});
+  await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'保存模型选择'})).toBeDisabled();
+  await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1/chat/completions');
+  await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');
+  await dialog.getByLabel('API Key',{exact:false}).fill('test-custom-key');
+  await dialog.getByRole('button',{name:'保存模型选择'}).click();
+  await page.locator('.intake-card textarea').nth(0).fill('姓名：张雨');await page.locator('.intake-card textarea').nth(1).fill('岗位：数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  expect(received).toMatchObject({mode:'custom',url:'https://api.example.com/v1/chat/completions',model:'custom-test-model',apiKey:'test-custom-key'});
+  await expect(page.locator('.save-state')).toHaveText('已本地保存');
+  const saved=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{
+    const request=indexedDB.open('folio-atelier',1);
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>{const db=request.result;const read=db.transaction('workspace','readonly').objectStore('workspace').get('resume-editor-state');read.onsuccess=()=>{resolve(JSON.stringify(read.result));db.close();};read.onerror=()=>{reject(read.error);db.close();};};
+  }));
+  expect(saved).not.toContain('test-custom-key');expect(saved).not.toContain('custom-test-model');
+});

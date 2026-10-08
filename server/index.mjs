@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { buildGenerationMessages, parseGeneration } from './generation.mjs';
+import { getPresetDefinitions, publicPreset } from './presets.mjs';
 import cors from 'cors';
 import express from 'express';
 import fs from 'node:fs';
@@ -20,27 +21,6 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http:/
 const corsOptions = { origin: (origin, callback) => { if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true); return callback(new Error('Origin not allowed')); } };
 app.use((request, response, next) => request.path.startsWith('/api') ? cors(corsOptions)(request, response, next) : next());
 app.use(express.json({ limit: '8mb' }));
-
-const builtInPresets = [
-  { id: 'openai', label: 'OpenAI', provider: 'OpenAI-compatible', baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1', model: process.env.OPENAI_MODEL || 'gpt-4o-mini', keyEnv: 'OPENAI_API_KEY', description: 'Railway 环境变量：OPENAI_API_KEY' },
-  { id: 'deepseek', label: 'DeepSeek', provider: 'OpenAI-compatible', baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1', model: process.env.DEEPSEEK_MODEL || 'deepseek-chat', keyEnv: 'DEEPSEEK_API_KEY', description: 'Railway 环境变量：DEEPSEEK_API_KEY' },
-  { id: 'cf-api-fan', label: 'cf.api.fan · gpt-6.1-sol', provider: 'OpenAI-compatible relay', baseUrl: process.env.CF_API_BASE_URL || 'https://cf.api.fan/v1', model: process.env.CF_API_MODEL || 'gpt-6.1-sol', keyEnv: 'CF_API_KEY', description: 'Railway 环境变量：CF_API_KEY' },
-];
-
-function getPresetDefinitions() {
-  const raw = process.env.AI_PRESETS_JSON;
-  if (!raw) return builtInPresets;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return builtInPresets;
-    const custom = parsed.filter((item) => item && typeof item.id === 'string' && typeof item.label === 'string' && typeof item.baseUrl === 'string' && typeof item.model === 'string' && typeof item.keyEnv === 'string').map((item) => ({ id: item.id, label: item.label, provider: typeof item.provider === 'string' ? item.provider : 'OpenAI-compatible', baseUrl: item.baseUrl, model: item.model, keyEnv: item.keyEnv, description: typeof item.description === 'string' ? item.description : `Railway 环境变量：${item.keyEnv}` }));
-    return custom.length > 0 ? custom : builtInPresets;
-  } catch { return builtInPresets; }
-}
-
-function publicPreset(preset) {
-  return { id: preset.id, label: preset.label, provider: preset.provider, model: preset.model, baseUrl: preset.baseUrl, description: preset.description };
-}
 
 function normalizeCompletionUrl(input) {
   const url = new URL(input);

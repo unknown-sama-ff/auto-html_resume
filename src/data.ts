@@ -1,4 +1,5 @@
-import type { ResumeData } from './types';
+import type { ResumeData, ModelPreset } from './types';
+import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL, AUTHOR_MODEL, AUTHOR_BASE_URL } from '../shared/modelOptions';
 
 export const DEFAULT_NODE_STYLE = {
   color: '#263633',
@@ -82,32 +83,11 @@ export const initialResume: ResumeData = {
   },
 };
 
-export const fallbackPresets = [
-  {
-    id: 'openai',
-    label: 'OpenAI-compatible',
-    provider: 'OpenAI-compatible',
-    model: 'gpt-4o-mini',
-    baseUrl: 'https://api.openai.com/v1',
-    description: '使用后端 Railway 环境变量中的 API Key。',
-  },
-  {
-    id: 'cf-api-fan',
-    label: 'cf.api.fan · gpt-6.1-sol',
-    provider: 'OpenAI-compatible relay',
-    model: 'gpt-6.1-sol',
-    baseUrl: 'https://cf.api.fan/v1',
-    description: '使用 Railway 后端的 CF_API_KEY。',
-  },
-  {
-    id: 'custom',
-    label: '自定义模型',
-    provider: 'Custom endpoint',
-    model: '',
-    baseUrl: '',
-    description: '仅本次会话使用，不会把 Key 保存到本地。',
-  },
-];
-
-
-
+export const fallbackPresets: ModelPreset[] = [{
+  id: AUTHOR_PRESET_ID,
+  label: AUTHOR_PRESET_LABEL,
+  provider: 'OpenAI-compatible relay',
+  model: AUTHOR_MODEL,
+  baseUrl: AUTHOR_BASE_URL,
+  description: '由作者后端配置，无需填写API Key。',
+}];

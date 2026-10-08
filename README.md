@@ -5,7 +5,7 @@
 ## 使用流程
 
 1. 首次打开显示工具介绍，不自动创建示例版本。
-2. 粘贴个人经历和岗位要求，或上传材料。点击“AI模型”选择后端预设或自定义通道。
+2. 粘贴个人经历和岗位要求，或上传材料。点击“AI模型”，只有“作者预设6.1-sol”和“自定义URL”两个入口。
 3. 确认AI处理授权，点击生成。后端实际调用模型；失败保留输入，不用示例冒充生成结果。
 4. 生成成功进入工作台，点击区块修改内容或把样式片段发给AI。建议可预览、应用、撤销。
 5. 每个岗位版本独立保存内容、对话、岗位分析和修改历史。可以复制、切换、改名、恢复历史。
@@ -47,7 +47,7 @@ npm run dev:api
 
 ## Railway环境变量
 
-内置默认预设为 `cf.api.fan / gpt-6.1-sol`。后端和前端共用一个服务。
+AI接入只提供 **“作者预设6.1-sol”** 和 **“自定义URL”** 两种方式。默认使用作者预设，由后端的CF_API_*变量配置`cf.api.fan / gpt-6.1-sol`；前后端共用一个服务。
 
 ```env
 CF_API_BASE_URL=https://cf.api.fan/v1
@@ -63,15 +63,14 @@ CORS_ORIGIN=https://你的Railway公开域名
 
 构建：`npm run build`；启动：`npm run start`；健康检查：`/api/health`。`railway.json`已配置。
 
-可以使用`OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL`或`DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL / DEEPSEEK_MODEL`配置其他内置通道。`AI_PRESETS_JSON`会替换内置预设列表，例如：
+### 两种AI接入方式
 
-```env
-AI_PRESETS_JSON=[{"id":"cf-api-fan","label":"第三方通道","provider":"OpenAI-compatible","baseUrl":"https://cf.api.fan/v1","model":"gpt-6.1-sol","keyEnv":"CF_API_KEY","description":"后端预设"}]
-```
+- **作者预设6.1-sol**：无需用户填写URL或Key，后端使用上面的CF_API_*变量。预设Key从不发送到前端，页面不显示其他供应商选项。
+- **自定义URL**：用户在网页填写完整URL、模型名称和自己的API Key。Key只存在当前前端会话，随当前请求临时发给后端，不进入IndexedDB、备份或HTML。切换模式保留自定义输入；取消设置不会改变已保存选择。
 
-`keyEnv`引用后端环境变量，不放真实Key。预设名称、模型、URL通过`/api/ai/presets`返回，不返回Key。
+自定义URL仍须命中后端的`ALLOWED_AI_HOSTS`，兼容OpenAI Chat Completions的请求/返回格式。基础URL会补齐`/chat/completions`；管理员可以按需把额外的通道域名加入白名单。
 
-自定义模型设置支持URL、Key、模型名。Key只存在当前前端会话，随当前请求临时发给后端，不进入IndexedDB、备份或HTML。自定义URL必须命中后端`ALLOWED_AI_HOSTS`；兼容OpenAI Chat Completions的请求/返回格式，基础URL会补齐`/chat/completions`。
+旧的`OPENAI_*`、`DEEPSEEK_*`和`AI_PRESETS_JSON`不再生效，可从Railway删除；现有`CF_API_*`变量保持兼容。`/api/ai/presets`只返回一个作者预设（id保持为`cf-api-fan`）。
 
 ## 安全与隐私
 

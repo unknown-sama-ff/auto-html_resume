@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Check, Code2, Download, FileText, History, Home, LayoutTemplate, Maximize2, Minus, MoreHorizontal, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Send, Settings2, ShieldCheck, Sparkles, Target, Undo2, WandSparkles, X, RefreshCcw } from 'lucide-react';
 import { initialResume, fallbackPresets } from './data';
 import { resumeSchema } from '../shared/contracts';
+import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL } from '../shared/modelOptions';
 import { applyPatch, cloneResume, getNodeMeta, requestAIEdit, updateContent } from './lib/ai';
 import { emptyWorkspace, makeVersion, migrateWorkspace, workspaceReducer } from './lib/workspace';
 import { loadWorkspace, saveWorkspace } from './lib/storage';
@@ -33,8 +34,8 @@ export default function App(){
   const [profileText,setProfileText]=useState('');const [jobText,setJobText]=useState('');
   const [profileMaterial,setProfileMaterial]=useState<ParsedMaterial|null>(null);const [jobMaterial,setJobMaterial]=useState<ParsedMaterial|null>(null);
   const [photo,setPhoto]=useState('');const [consent,setConsent]=useState(false);
-  const [showModels,setShowModels]=useState(false);const [presets,setPresets]=useState<ModelPreset[]>(fallbackPresets.filter(p=>p.id!=='custom'));
-  const [config,setConfig]=useState<ModelConfig>({mode:'preset',presetId:'cf-api-fan',url:'https://cf.api.fan/v1',apiKey:'',model:'gpt-6.1-sol'});
+  const [showModels,setShowModels]=useState(false);const [presets,setPresets]=useState<ModelPreset[]>(fallbackPresets);
+  const [config,setConfig]=useState<ModelConfig>({mode:'preset',presetId:AUTHOR_PRESET_ID,url:'',apiKey:'',model:''});
   const [draftConfig,setDraftConfig]=useState(config);
   const active=state.versions.find(v=>v.id===state.activeVersionId)??null;
   const selection=useMemo(()=>active&&selectedId?getNodeMeta(active.resume,selectedId):null,[active,selectedId]);
@@ -44,7 +45,7 @@ export default function App(){
     void saveWorkspace(state).then(()=>{setLastSavedState(state);setSaveError('');}).catch(()=>setSaveError('保存失败：浏览器空间不足，请先下载备份'));
   },[state,hydrated]);
   useEffect(()=>{localStorage.setItem('folio-sidebar',sidebarCollapsed?'collapsed':'expanded');},[sidebarCollapsed]);
-  useEffect(()=>{const controller=new AbortController();void fetch('/api/ai/presets',{signal:controller.signal}).then(r=>r.ok?r.json():null).then((data:unknown)=>{if(!Array.isArray(data))return;const values=data.filter(isModelPreset);if(!values.length)return;setPresets(values);setConfig(current=>current.mode==='preset'&&!values.some(p=>p.id===current.presetId)?{...current,presetId:values[0].id,model:values[0].model,url:values[0].baseUrl}:current);}).catch(()=>undefined);return()=>controller.abort();},[]);
+  useEffect(()=>{const controller=new AbortController();void fetch('/api/ai/presets',{signal:controller.signal}).then(r=>r.ok?r.json():null).then((data:unknown)=>{if(!Array.isArray(data))return;const author=data.find(item=>isModelPreset(item)&&item.id===AUTHOR_PRESET_ID);if(!isModelPreset(author))return;setPresets([{...author,label:AUTHOR_PRESET_LABEL}]);}).catch(()=>undefined);return()=>controller.abort();},[]);
   useEffect(()=>{const handler=(e:KeyboardEvent)=>{if(e.key==='Escape'){setFullscreen(false);setShowModels(false);}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);},[]);
   useEffect(()=>{if(!fullscreen)return;const old=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.body.style.overflow=old;};},[fullscreen]);
   useEffect(()=>()=>editController.current?.abort(),[]);
