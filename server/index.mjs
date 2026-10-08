@@ -69,8 +69,10 @@ function resolveProviderConfig(config = {}) {
   const definitions = getPresetDefinitions();
   const preset = definitions.find((item) => item.id === config.presetId);
   if (!preset) throw new Error('没有可用的后端模型预设');
-  const apiKey = process.env[preset.keyEnv] || '';
+  const apiKey = (process.env[preset.keyEnv] || '').trim();
   if (!apiKey) throw new Error(`Railway 尚未配置 ${preset.keyEnv}`);
+  if (/^(REPLACE_WITH_|YOUR_|请|你的|在Railway)/i.test(apiKey) || apiKey === '...') throw new Error(`${preset.keyEnv} 仍是示例占位值，请在 Railway 填入真实令牌并重新部署。`);
+  if (/\s/.test(apiKey) || /^Bearer\b/i.test(apiKey) || /['"]/.test(apiKey)) throw new Error(`${preset.keyEnv} 格式不正确：只填写令牌本身，不要包含 Bearer、引号或中间空格。`);
   return { url: normalizeCompletionUrl(preset.baseUrl), model: preset.model, apiKey };
 }
 
@@ -84,7 +86,8 @@ async function requestModel(config, messages) {
   if(upstream.status>=300 && upstream.status<400) throw new Error('模型接口重定向已被拒绝，请填写直接调用地址。');
   if(!upstream.ok) {
     // Never echo an upstream body that could contain API keys or private request data.
-    if(upstream.status===401 || upstream.status===403) throw new Error('模型鉴权失败，请检查后端Key或自定义Key。');
+    if(upstream.status===401) throw Object.assign(new Error('作者预设认证失败（上游 HTTP 401）。请确认 Railway 的 CF_API_KEY 为有效令牌，并在保存变量后重新部署。'), { upstreamStatus:401 });
+    if(upstream.status===403) throw Object.assign(new Error('作者预设访问被拒绝（上游 HTTP 403）。请检查令牌分组、模型调用权限、IP 限制或通道网关规则。'), { upstreamStatus:403 });
     if(upstream.status===429) throw new Error('模型通道限流或额度不足，请稍后重试。');
     throw new Error(`模型接口返回${upstream.status}，请检查URL、模型名称和图片能力。`);
   }
@@ -95,10 +98,11 @@ async function requestModel(config, messages) {
   return content;
 }
 function sendFailure(response,error) {
+  if(error?.upstreamStatus===401 || error?.upstreamStatus===403) return response.status(502).json({error:error.message,upstreamStatus:error.upstreamStatus});
   if(error?.name==='ZodError') return response.status(400).json({error:'输入材料格式不正确或超过限制，请检查后重试。'});
   if(error?.name==='TimeoutError' || error?.name==='AbortError') return response.status(504).json({error:'模型请求超时，资料已保留，请重试。'});
   const message=error instanceof Error ? error.message : '模型请求失败';
-  const status= /尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连/.test(message) ? 400 : 502;
+  const status= /尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY/.test(message) ? 400 : 502;
   return response.status(status).json({error:message});
 }
 app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier'}));

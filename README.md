@@ -65,6 +65,15 @@ CORS_ORIGIN=https://你的Railway公开域名
 
 构建：`npm run build`；启动：`npm run start`；健康检查：`/api/health`。`railway.json`已配置。
 
+### 作者预设报401/403时
+
+- 当前作者预设读取的是`CF_API_KEY`，不是`OPENAI_API_KEY`或浏览器自定义Key。
+- 在Railway当前production环境、这个服务的Variables中，只填写令牌值，不要带`Bearer`、引号、示例占位文字或中间空格。首尾空白会由后端清理。
+- 更新变量需要应用待部署更改；等待新部署上线后再次生成，旧实例不会因为刷新网页读取新Key。
+- 上游HTTP401表示认证未通过，应检查Key是否有效、失效或与当前通道不匹配。HTTP403表示请求被拒绝，应检查令牌分组、模型调用权限、IP限制或网关策略，不能仅凭403断定Key错误。
+- 新错误返回`upstreamStatus`数字，便于诊断；不返回上游原始报错正文、Key或用户材料。
+- 本地模拟测试不等于已确认实际模型通道可用。不要把真实Key或未打码Variables截图发到公开仓库/对话。
+
 ### 两种AI接入方式
 
 - **作者预设6.1-sol**：无需用户填写URL或Key，后端使用上面的CF_API_*变量。预设Key从不发送到前端，页面不显示其他供应商选项。

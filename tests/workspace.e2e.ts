@@ -266,3 +266,12 @@ test('DOCX resume upload is extracted in the browser',async({page})=>{
 test('legacy .doc gives a conversion hint instead of silently failing',async({page})=>{
   await page.goto('/');await page.getByLabel('上传个人资料文件').setInputFiles({name:'candidate.doc',mimeType:'application/msword',buffer:Buffer.from('old word','utf8')});await expect(page.getByRole('alert')).toContainText('另存为 .docx');
 });
+
+for(const status of [401,403]){
+  test(`author HTTP ${status} errors show actionable diagnostics and keep the entered materials`,async({page})=>{
+    const error=status===401?'作者预设认证失败（上游 HTTP 401）。请确认 Railway 的 CF_API_KEY 为有效令牌，并在保存变量后重新部署。':'作者预设访问被拒绝（上游 HTTP 403）。请检查令牌分组、模型调用权限、IP 限制或通道网关规则。';
+    await page.route('**/api/ai/generate',route=>route.fulfill({status:502,json:{error,upstreamStatus:status}}));
+    await page.goto('/');await page.locator('.intake-card textarea').first().fill('个人资料要保留');await page.locator('.intake-card textarea').nth(1).fill('岗位要求要保留');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+    await expect(page.getByRole('alert')).toContainText(`HTTP ${status}`);await expect(page.locator('.intake-card textarea').first()).toHaveValue('个人资料要保留');await expect(page.locator('.resume-paper')).toHaveCount(0);
+  });
+}
