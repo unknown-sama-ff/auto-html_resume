@@ -78,7 +78,7 @@ test('phone viewport keeps both export actions available without horizontal page
 test('PDF extraction runs in browser and its contents reach the generator',async({page})=>{
   const {textPdf}=await import('./pdf-fixture');let profile='';await page.route('**/api/ai/generate',route=>{profile=route.request().postDataJSON().profileText;return route.fulfill({json:makeResult()});});
   await page.goto('/');await page.getByLabel('上传个人资料文件').setInputFiles({name:'candidate.pdf',mimeType:'application/pdf',buffer:textPdf('Candidate Zhang: Python and SQL project')});
-  await expect(page.locator('.intake-card').first()).toContainText('已提取文字');await page.locator('.intake-card textarea').nth(1).fill('数据分析岗位');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(profile).toContain('Python and SQL');
+  await expect(page.locator('.intake-card').first()).toContainText('已解析PDF文字');await page.locator('.intake-card textarea').nth(1).fill('数据分析岗位');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(profile).toContain('Python and SQL');
 });
 
 test('job screenshots reach the model as images rather than file names',async({page})=>{
@@ -244,4 +244,25 @@ test('Escape cancels deletion and a late AI edit cannot restore a removed versio
   }finally{release();}
   await expect(page.locator('.version-item')).toHaveCount(1);await expect(page.locator('.patch-card')).toHaveCount(0);await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(25, 59, 53)');
   await expect(page.getByRole('textbox',{name:'AI修改要求'})).toHaveValue('');
+});
+
+test('HTML resume upload is sanitized to text and reaches the generator',async({page})=>{
+  let submitted='';await page.route('**/api/ai/generate',route=>{submitted=route.request().postDataJSON().profileText;return route.fulfill({json:makeResult()});});await page.goto('/');
+  await page.getByLabel('上传个人资料文件').setInputFiles({name:'candidate.html',mimeType:'text/html',buffer:Buffer.from('<html><head><title>张雨简历</title><script>window.evil=1</script></head><body><h1>张雨</h1><p>项目：网页数据分析</p><style>.x{}</style></body></html>','utf8')});
+  await expect(page.locator('.intake-card').first()).toContainText('已解析HTML文字');await expect(page.locator('.extracted-material pre')).toContainText('网页数据分析');await expect(page.locator('.extracted-material pre')).not.toContainText('window.evil');
+  await page.locator('.intake-card textarea').nth(1).fill('数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(submitted).toContain('网页数据分析');expect(submitted).not.toContain('window.evil');
+});
+
+test('DOCX resume upload is extracted in the browser',async({page})=>{
+  const JSZip=(await import('jszip')).default;const zip=new JSZip();
+  zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/document.xml','<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>张雨</w:t></w:r></w:p><w:p><w:r><w:t>项目：企业数据看板</w:t></w:r></w:p></w:body></w:document>');
+  const buffer=await zip.generateAsync({type:'nodebuffer'});let submitted='';await page.route('**/api/ai/generate',route=>{submitted=route.request().postDataJSON().profileText;return route.fulfill({json:makeResult()});});await page.goto('/');
+  await page.getByLabel('上传个人资料文件').setInputFiles({name:'candidate.docx',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',buffer});await expect(page.locator('.intake-card').first()).toContainText('已解析DOCX文字');await expect(page.locator('.extracted-material pre')).toContainText('企业数据看板');
+  await page.locator('.intake-card textarea').nth(1).fill('数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(submitted).toContain('企业数据看板');
+});
+
+test('legacy .doc gives a conversion hint instead of silently failing',async({page})=>{
+  await page.goto('/');await page.getByLabel('上传个人资料文件').setInputFiles({name:'candidate.doc',mimeType:'application/msword',buffer:Buffer.from('old word','utf8')});await expect(page.getByRole('alert')).toContainText('另存为 .docx');
 });
