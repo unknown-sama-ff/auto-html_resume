@@ -41,7 +41,7 @@ export function ModelSettings({ config, presets, onChange, onClose, onSave }: {
         <label htmlFor="model-url">完整 URL</label>
         <input id="model-url" type="url" value={config.url} autoComplete="off" spellCheck={false}
           onChange={event => onChange({ ...config, url: event.target.value })}
-          placeholder="https://你的通道域名/v1/chat/completions"/>
+          placeholder="https://你的通道域名/v1/chat/completions 或 /v1/responses"/>
         <label htmlFor="model-name">模型名称</label>
         <input id="model-name" value={config.model} autoComplete="off" spellCheck={false}
           onChange={event => onChange({ ...config, model: event.target.value })} placeholder="例如 gpt-6.1-sol"/>

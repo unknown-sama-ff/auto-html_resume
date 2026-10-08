@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { buildGenerationMessages, parseGeneration } from './generation.mjs';
 import { getPresetDefinitions, publicPreset } from './presets.mjs';
 import { buildEditMessages, parseEditPatch } from '../shared/edit.ts';
+import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest } from '../shared/modelProtocol.ts';
 import cors from 'cors';
 import express from 'express';
 import fs from 'node:fs';
@@ -22,14 +23,6 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http:/
 const corsOptions = { origin: (origin, callback) => { if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true); return callback(new Error('Origin not allowed')); } };
 app.use((request, response, next) => request.path.startsWith('/api') ? cors(corsOptions)(request, response, next) : next());
 app.use(express.json({ limit: '8mb' }));
-
-function normalizeCompletionUrl(input) {
-  const url = new URL(input);
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('AI URL 只支持 http 或 https');
-  const pathname = url.pathname.replace(/\/+$/, '');
-  if (!pathname.endsWith('/chat/completions')) url.pathname = `${pathname}/chat/completions`;
-  return url;
-}
 
 function isPrivateIp(address) {
   if (net.isIPv4(address)) {
@@ -73,7 +66,7 @@ function resolveProviderConfig(config = {}) {
   if (!apiKey) throw new Error(`Railway 尚未配置 ${preset.keyEnv}`);
   if (/^(REPLACE_WITH_|YOUR_|请|你的|在Railway)/i.test(apiKey) || apiKey === '...') throw new Error(`${preset.keyEnv} 仍是示例占位值，请在 Railway 填入真实令牌并重新部署。`);
   if (/\s/.test(apiKey) || /^Bearer\b/i.test(apiKey) || /['"]/.test(apiKey)) throw new Error(`${preset.keyEnv} 格式不正确：只填写令牌本身，不要包含 Bearer、引号或中间空格。`);
-  return { url: normalizeCompletionUrl(preset.baseUrl), model: preset.model, apiKey };
+  return { ...resolveModelEndpoint(preset.baseUrl, preset.protocol), model: preset.model, apiKey };
 }
 
 async function requestModel(config, messages) {
@@ -82,27 +75,36 @@ async function requestModel(config, messages) {
   const headers = { 'Content-Type': 'application/json' };
   if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
   const signal = AbortSignal.timeout(90_000);
-  const upstream = await fetch(provider.url, { method: 'POST', headers, redirect: 'manual', signal, body: JSON.stringify({ model: provider.model, messages }) });
+  const upstream = await fetch(provider.url, { method: 'POST', headers, redirect: 'manual', signal, body: JSON.stringify(buildModelRequest(provider.model, messages, provider.protocol)) });
   if(upstream.status>=300 && upstream.status<400) throw new Error('模型接口重定向已被拒绝，请填写直接调用地址。');
   if(!upstream.ok) {
     // Never echo an upstream body that could contain API keys or private request data.
     if(upstream.status===401) throw Object.assign(new Error('作者预设认证失败（上游 HTTP 401）。请确认 Railway 的 CF_API_KEY 为有效令牌，并在保存变量后重新部署。'), { upstreamStatus:401 });
     if(upstream.status===403) throw Object.assign(new Error('作者预设访问被拒绝（上游 HTTP 403）。请检查令牌分组、模型调用权限、IP 限制或通道网关规则。'), { upstreamStatus:403 });
+    if(upstream.status===400) {
+      const body = await upstream.text();
+      let payload = null;
+      if(body.length <= 64000) { try { payload = JSON.parse(body); } catch { /* Never expose arbitrary gateway HTML or raw text. */ } }
+      const detail = describeBadRequest(payload);
+      throw Object.assign(new Error(`作者预设请求被拒绝（上游 HTTP 400）。${detail.hint}`), { upstreamStatus:400, ...detail });
+    }
     if(upstream.status===429) throw new Error('模型通道限流或额度不足，请稍后重试。');
     throw new Error(`模型接口返回${upstream.status}，请检查URL、模型名称和图片能力。`);
   }
   const raw = await upstream.text();
   if(raw.length>1000000) throw new Error('模型返回内容过大，请精简资料后重试。');
-  const payload=JSON.parse(raw); const content=payload?.choices?.[0]?.message?.content;
-  if(typeof content!=='string' || !content.trim()) throw new Error('模型没有返回有效文本。');
-  return content;
+  let payload;
+  try { payload=JSON.parse(raw); } catch { throw new Error('模型返回的不是非流式JSON，请核对接口协议和流式要求。'); }
+  return extractModelText(payload, provider.protocol);
 }
+
 function sendFailure(response,error) {
+  if(error?.upstreamStatus===400) return response.status(502).json({error:error.message,upstreamStatus:400,diagnostic:error.diagnostic,...(error.upstreamCode?{upstreamCode:error.upstreamCode}:{}),...(error.upstreamParam?{upstreamParam:error.upstreamParam}:{})});
   if(error?.upstreamStatus===401 || error?.upstreamStatus===403) return response.status(502).json({error:error.message,upstreamStatus:error.upstreamStatus});
   if(error?.name==='ZodError') return response.status(400).json({error:'输入材料格式不正确或超过限制，请检查后重试。'});
   if(error?.name==='TimeoutError' || error?.name==='AbortError') return response.status(504).json({error:'模型请求超时，资料已保留，请重试。'});
   const message=error instanceof Error ? error.message : '模型请求失败';
-  const status= /尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY/.test(message) ? 400 : 502;
+  const status= /尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL/.test(message) ? 400 : 502;
   return response.status(status).json({error:message});
 }
 app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier'}));

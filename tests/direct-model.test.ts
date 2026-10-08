@@ -41,3 +41,14 @@ test('author requests send neither custom URL nor user Key to backend',async t=>
   });
   await requestGeneration({...config,mode:'preset'},'姓名：测试','测试岗位',[],[]);
 });
+
+test('custom Responses URL goes directly to provider with input/store=false and extracts its final text',async t=>{
+  let count=0;t.mock.method(globalThis,'fetch',async(input:string,init:RequestInit)=>{
+    assert.equal(input,'https://provider.example/v1/responses');const request=JSON.parse(String(init.body));assert.equal(request.model,'own-model');assert.equal(request.store,false);assert.equal(request.stream,false);assert.ok(Array.isArray(request.input));assert.ok(!('messages' in request));count++;
+    const content=count===1?generation:{targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'测试',preview:'改为深蓝色',requiresConfirmation:false};
+    return new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(content)}]}]}),{status:200});
+  });
+  const responsesConfig={...config,url:'https://provider.example/v1/responses'};
+  assert.equal((await requestGeneration(responsesConfig,'测试资料','测试岗位',[],[])).resume.name,initialResume.name);
+  const edit=await requestAIEdit(responsesConfig,'改颜色',getNodeMeta(initialResume,'profile-name'));assert.equal(edit.value,'#315A64');assert.equal(count,2);
+});

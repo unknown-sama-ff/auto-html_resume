@@ -13,7 +13,7 @@ export function buildGenerationMessages(body: unknown): CompletionMessage[] {
   const content: CompletionContent[] = [{ type: 'text', text: JSON.stringify({ profileText: input.profileText, jobText: input.jobText }) }];
   for (const image of input.profileImages) { content.push({ type:'text',text:`以下是个人资料图片：${image.name}` }); content.push({type:'image_url',image_url:{url:image.dataUrl}}); }
   for (const image of input.jobImages) { content.push({ type:'text',text:`以下是岗位要求图片：${image.name}` }); content.push({type:'image_url',image_url:{url:image.dataUrl}}); }
-  return [{role:'system',content:system},{role:'user',content}];
+  return [{role:'system',content:system},{role:'user',content:input.profileImages.length || input.jobImages.length ? content : content[0].type === 'text' ? content[0].text : ''}];
 }
 export function parseGeneration(content: string) {
   const parsed = generationSchema.safeParse(parseModelJson(content));

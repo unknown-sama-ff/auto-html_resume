@@ -6,8 +6,9 @@ export function getPresetDefinitions(environment = process.env) {
     id: AUTHOR_PRESET_ID,
     label: AUTHOR_PRESET_LABEL,
     provider: 'OpenAI-compatible relay',
-    baseUrl: environment.CF_API_BASE_URL || AUTHOR_BASE_URL,
-    model: environment.CF_API_MODEL || AUTHOR_MODEL,
+    baseUrl: (environment.CF_API_BASE_URL || AUTHOR_BASE_URL).trim(),
+    protocol: (environment.CF_API_PROTOCOL || 'auto').trim(),
+    model: (environment.CF_API_MODEL || AUTHOR_MODEL).trim(),
     keyEnv: 'CF_API_KEY',
     description: '由作者后端配置，无需填写API Key。',
   }];

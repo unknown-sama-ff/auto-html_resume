@@ -54,6 +54,7 @@ AI接入只提供 **“作者预设6.1-sol”** 和 **“自定义URL”** 两�
 ```env
 CF_API_BASE_URL=https://cf.api.fan/v1
 CF_API_MODEL=gpt-6.1-sol
+CF_API_PROTOCOL=auto
 CF_API_KEY=在Railway填写真实Key
 ALLOWED_AI_HOSTS=cf.api.fan
 ALLOW_PRIVATE_AI_URLS=false
@@ -74,12 +75,22 @@ CORS_ORIGIN=https://你的Railway公开域名
 - 新错误返回`upstreamStatus`数字，便于诊断；不返回上游原始报错正文、Key或用户材料。
 - 本地模拟测试不等于已确认实际模型通道可用。不要把真实Key或未打码Variables截图发到公开仓库/对话。
 
+### 上游HTTP400与两种接口协议
+
+- `CF_API_BASE_URL=https://cf.api.fan/v1`及完整`/v1/chat/completions`都有效，不会重复追加路径。
+- 默认`CF_API_PROTOCOL=auto`：基础`/v1`选择Chat Completions，完整`/v1/responses`选择Responses。可显式设`CF_API_PROTOCOL=responses`或`chat_completions`。只在服务商要求或主动选择时切换，不自动降级/重试，避免重复计费和重复提交资料。
+- Chat Completions纯文字请求使用字符串`messages[].content`；只有带图片时才发内容数组，避免部分转发服务拒绝纯文本数组。
+- Responses请求使用`instructions/input`、`input_text/input_image`并带`store=false`，读取最终`output_text`。两种协议当前均使用`stream=false`，要求stream=true的通道不受支持，需要向服务商核对非流式能力。
+- 自定义URL可填写完整`/v1/responses`地址，仍由浏览器直连，不经过后端。基础URL默认走Chat Completions。
+- 400提示只显示已知的请求格式/模型/图片/长度/协议/流式要求提示，以及经过白名单的错误码和参数名。不会把上游原文、Key、用户材料或任意网关HTML返回页面。
+- 这些兼容测试使用本地模拟通道，不证明实际第三方模型与令牌一定可用。两个接口都可用也不表示同一模型在所有通道分组中都可用。
+
 ### 两种AI接入方式
 
 - **作者预设6.1-sol**：无需用户填写URL或Key，后端使用上面的CF_API_*变量。预设Key从不发送到前端，页面不显示其他供应商选项。
 - **自定义URL**：用户在网页填写完整URL、模型名称和自己的API Key。浏览器将资料和Key直接发送给用户指定的模型服务，不经过我们的后端。Key只存在当前前端会话，不进入IndexedDB、备份或HTML。切换模式保留自定义输入；取消设置不会改变已保存选择。
 
-自定义URL由浏览器直接调用，不经过Railway后端、不使用后端域名白名单。接口需要兼容OpenAI Chat Completions，基础URL会补齐`/chat/completions`。在HTTPS网页上只能使用HTTPS接口。
+自定义URL由浏览器直接调用，不经过Railway后端、不使用后端域名白名单。接口需要兼容Chat Completions或Responses；基础URL补齐`/chat/completions`，完整`/responses`地址保留并使用对应协议。在HTTPS网页上只能使用HTTPS接口。
 
 旧的`OPENAI_*`、`DEEPSEEK_*`和`AI_PRESETS_JSON`不再生效，可从Railway删除；现有`CF_API_*`变量保持兼容。`/api/ai/presets`只返回一个作者预设（id保持为`cf-api-fan`）。
 
