@@ -61,6 +61,7 @@ AI接入只提供 **“作者预设6.1-sol”** 和 **“自定义URL”** 两�
 CF_API_BASE_URL=https://cf.api.fan/v1
 CF_API_MODEL=gpt-6.1-sol
 CF_API_PROTOCOL=auto
+CF_API_REASONING_EFFORT=medium
 CF_API_KEY=在Railway填写真实Key
 ALLOWED_AI_HOSTS=cf.api.fan
 ALLOW_PRIVATE_AI_URLS=false

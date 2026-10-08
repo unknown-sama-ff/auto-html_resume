@@ -47,3 +47,9 @@ test('400 diagnostics whitelist hints without returning upstream private content
   assert.equal(describeBadRequest({error:{message:'Must set stream to true'}}).diagnostic,'streaming_required');
   assert.equal(describeBadRequest({error:{code:'context_length_exceeded'}}).diagnostic,'context_too_long');
 });
+
+test('reasoning effort is added only when configured and follows each protocol',()=>{
+  const chat=buildModelRequest('gpt-6.1-sol',messages,'chat_completions','medium');assert.equal(chat.reasoning_effort,'medium');assert.equal(chat.stream,false);
+  const none=buildModelRequest('gpt-6.1-sol',messages,'chat_completions','none');assert.ok(!('reasoning_effort' in none));
+  const responses=buildModelRequest('gpt-6.1-sol',messages,'responses','medium');assert.deepEqual(responses.reasoning,{effort:'medium'});assert.equal(responses.store,false);
+});

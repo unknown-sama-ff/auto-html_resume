@@ -66,7 +66,7 @@ function resolveProviderConfig(config = {}) {
   if (!apiKey) throw new Error(`Railway 尚未配置 ${preset.keyEnv}`);
   if (/^(REPLACE_WITH_|YOUR_|请|你的|在Railway)/i.test(apiKey) || apiKey === '...') throw new Error(`${preset.keyEnv} 仍是示例占位值，请在 Railway 填入真实令牌并重新部署。`);
   if (/\s/.test(apiKey) || /^Bearer\b/i.test(apiKey) || /['"]/.test(apiKey)) throw new Error(`${preset.keyEnv} 格式不正确：只填写令牌本身，不要包含 Bearer、引号或中间空格。`);
-  return { ...resolveModelEndpoint(preset.baseUrl, preset.protocol), model: preset.model, apiKey };
+  return { ...resolveModelEndpoint(preset.baseUrl, preset.protocol), model: preset.model, reasoningEffort: preset.reasoningEffort, apiKey };
 }
 
 async function requestModel(config, messages) {
@@ -75,7 +75,7 @@ async function requestModel(config, messages) {
   const headers = { 'Content-Type': 'application/json' };
   if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
   const signal = AbortSignal.timeout(90_000);
-  const upstream = await fetch(provider.url, { method: 'POST', headers, redirect: 'manual', signal, body: JSON.stringify(buildModelRequest(provider.model, messages, provider.protocol)) });
+  const upstream = await fetch(provider.url, { method: 'POST', headers, redirect: 'manual', signal, body: JSON.stringify(buildModelRequest(provider.model, messages, provider.protocol, provider.reasoningEffort)) });
   if(upstream.status>=300 && upstream.status<400) throw new Error('模型接口重定向已被拒绝，请填写直接调用地址。');
   if(!upstream.ok) {
     // Never echo an upstream body that could contain API keys or private request data.
@@ -129,5 +129,3 @@ if (fs.existsSync(distDir)) {
 }
 
 app.listen(port, () => console.log(`folio-atelier server listening on ${port}`));
-
-

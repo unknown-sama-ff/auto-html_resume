@@ -2,6 +2,7 @@ import type { CompletionMessage } from './generation.ts';
 
 export type ModelProtocol = 'chat_completions' | 'responses';
 export type ProtocolChoice = ModelProtocol | 'auto';
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export function resolveModelEndpoint(input: string, choice: string = 'auto') {
   if (!['auto', 'chat_completions', 'responses'].includes(choice)) throw new Error('CF_API_PROTOCOL 只支持 auto、chat_completions 或 responses。');
@@ -17,9 +18,9 @@ export function resolveModelEndpoint(input: string, choice: string = 'auto') {
   return { url, protocol };
 }
 
-export function buildModelRequest(model: string, messages: CompletionMessage[], protocol: ModelProtocol) {
+export function buildModelRequest(model: string, messages: CompletionMessage[], protocol: ModelProtocol, reasoningEffort?: ReasoningEffort) {
   const normalized = messages.map(message => ({ ...message, content: Array.isArray(message.content) && message.content.every(part => part.type === 'text') ? message.content.map(part => part.type === 'text' ? part.text : '').join('\n') : message.content }));
-  if (protocol === 'chat_completions') return { model, messages: normalized, stream: false };
+  if (protocol === 'chat_completions') return { model, messages: normalized, stream: false, ...(reasoningEffort && reasoningEffort !== 'none' ? { reasoning_effort: reasoningEffort } : {}) };
   const instructions = normalized.filter(message => message.role === 'system').map(message => typeof message.content === 'string' ? message.content : message.content.filter(part => part.type === 'text').map(part => part.type === 'text' ? part.text : '').join('\n')).join('\n\n');
   const input = normalized.filter(message => message.role !== 'system').map(message => ({
     role: message.role,
@@ -27,7 +28,7 @@ export function buildModelRequest(model: string, messages: CompletionMessage[], 
       ? [{ type: 'input_text', text: message.content }]
       : message.content.map(part => part.type === 'text' ? { type: 'input_text', text: part.text } : { type: 'input_image', image_url: part.image_url.url }),
   }));
-  return { model, instructions, input, store: false, stream: false };
+  return { model, instructions, input, store: false, stream: false, ...(reasoningEffort && reasoningEffort !== 'none' ? { reasoning: { effort: reasoningEffort } } : {}) };
 }
 
 function object(value: unknown): Record<string, unknown> | null { return value && typeof value === 'object' ? value as Record<string, unknown> : null; }

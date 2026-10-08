@@ -32,3 +32,8 @@ test('legacy provider variables and preset JSON cannot add choices or override t
   assert.ok(!('apiKey' in metadata));assert.ok(!('keyEnv' in metadata));
   assert.ok(!JSON.stringify(metadata).includes('author-secret-not-to-return'));
 });
+
+test('author preset includes medium reasoning effort by default and can disable it through env',()=>{
+  assert.equal(getPresetDefinitions({})[0].reasoningEffort,'medium');
+  assert.equal(getPresetDefinitions({CF_API_REASONING_EFFORT:'none'})[0].reasoningEffort,'none');
+});
