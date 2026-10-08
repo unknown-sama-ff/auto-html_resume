@@ -66,6 +66,7 @@ CF_API_KEY=在Railway填写真实Key
 ALLOWED_AI_HOSTS=cf.api.fan
 ALLOW_PRIVATE_AI_URLS=false
 AI_RATE_LIMIT=12
+AI_REQUEST_TIMEOUT_MS=240000
 CORS_ORIGIN=https://你的Railway公开域名
 ```
 
@@ -130,6 +131,17 @@ railway ssh --service auto-html_resume --environment production -- npm run check
 
 名单可以返回`modelIds`供管理员核对，但不要把Key或完整个人资料分享给其他人。标准模型列表格式参考官方Models API：`https://developers.openai.com/api/reference/resources/models/methods/list`。第三方中转可能展示全局模型列表而非当前Key授权范围，仍以其后台或服务商确认为准。
 
+### high推理与504超时
+
+原版本固定等待90秒；现在作者预设默认等待240秒，可用`AI_REQUEST_TIMEOUT_MS=240000`配置，范围1000–270000毫秒。作者生成和编辑共享同一个请求预算，涵盖等待响应及读取结果。自定义浏览器直连同样默认240秒；Railway变量只控制作者后端请求。
+
+- 保留管理员设置的推理强度，不自动从high改成medium；若更看重速度，可以自行设置`CF_API_REASONING_EFFORT=medium`或更低支持值，服务商能力仍以实际为准。
+- 不会因为超时自动重试，避免多次调用/费用。生成中的页面提示可能需要数分钟；错误时输入材料仍保留。
+- 本地等待预算耗尽标记`request_timeout`，诊断显示`timeoutMs / elapsedMs / phase`，区分等通道响应、读取返回数据等阶段。
+- 中转自身返回HTTP408/504时标记`upstream_timeout`，不是工具预算。调大工具预算不能延长中转自己的响应限制。
+- 非流式请求期间可能受到网关空闲限制；Railway文档写明5分钟无数据传输会关闭连接，因此本版最多270秒预留余量，不采用无限超时。需要更长任务时需另行设计流式/异步作业，而不是继续加大环境变量。
+- 用短文本测试仍超时，请复制完整诊断和对应[ai-error]日志（不含Key），向中转核查该时段排队和网络状态。504不证明最终模型结果或鉴权全部正确，实际服务尚需重试确认。
+
 ### 两种AI接入方式
 
 - **作者预设6.1-sol**：无需用户填写URL或Key，后端使用上面的CF_API_*变量。预设Key从不发送到前端，页面不显示其他供应商选项。
@@ -163,7 +175,7 @@ Access-Control-Allow-Headers: Authorization, Content-Type
 
 ## 安全与隐私
 
-- 作者预设：后端出站仍验证目标域名和私网解析，拒绝重定向；请求体上限8MB；请求超时90秒；按IP限流。
+- 作者预设：后端出站仍验证目标域名和私网解析，拒绝重定向；请求体上限8MB；请求等待上限默认240秒（AI_REQUEST_TIMEOUT_MS可配置）；按IP限流。
 - 自定义URL：浏览器直连，使用自己的Key、URL、模型名称；不携带Cookie、不发送Referrer、不跟随重定向，连接失败不自动回退到后端代理。
 - 模型材料按数据而非指令处理；返回简历结构校验；局部修改仅允许受控属性和当前节点，不执行HTML/JS。
 - 原始文件在浏览器读取；简历版本、历史和备份位于本地浏览器。作者预设请求在后端内存中临时处理，不落库、不写求职文件、不记录正文或用户Key。后端仅保留作者环境变量及临时IP限流记录。

@@ -11,6 +11,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { parseAiTimeoutMs } from '../shared/requestTimeout.ts';
 import { appVersion, DIAGNOSTICS_VERSION, requestDiagnostics, logAiFailure } from './diagnostics.mjs';
 
 const app = express();
@@ -82,45 +83,64 @@ function resolveProviderConfig(config = {}) {
 
 async function requestModel(config, messages, context) {
   const provider = resolveProviderConfig(config);
-  if(context)context.details=requestDiagnostics(provider,messages);
-  await assertSafeDestination(provider.url);
-  const headers = { 'Content-Type': 'application/json' };
-  if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
-  const signal = AbortSignal.timeout(90_000);
-  const upstream = await fetch(provider.url, { method: 'POST', headers, redirect: 'manual', signal, body: JSON.stringify(buildModelRequest(provider.model, messages, provider.protocol, provider.reasoningEffort)) });
-  if(upstream.status>=300 && upstream.status<400) throw new Error('模型接口重定向已被拒绝，请填写直接调用地址。');
-  if(!upstream.ok) {
-    // Never echo an upstream body that could contain API keys or private request data.
-    if(upstream.status===401) throw Object.assign(new Error('作者预设认证失败（上游 HTTP 401）。请确认 Railway 的 CF_API_KEY 为有效令牌，并在保存变量后重新部署。'), { upstreamStatus:401 });
-    if(upstream.status===403) throw Object.assign(new Error('作者预设访问被拒绝（上游 HTTP 403）。请检查令牌分组、模型调用权限、IP 限制或通道网关规则。'), { upstreamStatus:403 });
-    if(upstream.status===400) {
-      const body = await upstream.text();
-      let payload = null;
-      if(body.length <= 64000) { try { payload = JSON.parse(body); } catch { /* Never expose arbitrary gateway HTML or raw text. */ } }
-      const detail = describeBadRequest(payload);
-      throw Object.assign(new Error(`作者预设请求被拒绝（上游 HTTP 400）。${detail.hint}`), { upstreamStatus:400, ...detail });
+  const timeoutMs = parseAiTimeoutMs(process.env.AI_REQUEST_TIMEOUT_MS);
+  const started = performance.now();
+  let phase = 'checking_destination';
+  if(context)context.details={...requestDiagnostics(provider,messages),timeoutMs,phase};
+  const signal = AbortSignal.timeout(timeoutMs);
+  try {
+    await assertSafeDestination(provider.url);
+    signal.throwIfAborted();
+    const headers = { 'Content-Type': 'application/json' };
+    if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
+    phase = 'waiting_response';
+    const upstream = await fetch(provider.url, { method: 'POST', headers, redirect: 'manual', signal, body: JSON.stringify(buildModelRequest(provider.model, messages, provider.protocol, provider.reasoningEffort)) });
+    phase = 'reading_response';
+    if(upstream.status>=300 && upstream.status<400) throw new Error('模型接口重定向已被拒绝，请填写直接调用地址。');
+    if(!upstream.ok) {
+      // Never echo an upstream body that could contain API keys or private request data.
+      if(upstream.status===401) throw Object.assign(new Error('作者预设认证失败（上游 HTTP 401）。请确认 Railway 的 CF_API_KEY 为有效令牌，并在保存变量后重新部署。'), { upstreamStatus:401 });
+      if(upstream.status===403) throw Object.assign(new Error('作者预设访问被拒绝（上游 HTTP 403）。请检查令牌分组、模型调用权限、IP 限制或通道网关规则。'), { upstreamStatus:403 });
+      if(upstream.status===400) {
+        const body = await upstream.text();
+        let payload = null;
+        if(body.length <= 64000) { try { payload = JSON.parse(body); } catch { /* Ignore arbitrary upstream error content. */ } }
+        const detail = describeBadRequest(payload);
+        throw Object.assign(new Error(`作者预设请求被拒绝（上游 HTTP 400）。${detail.hint}`), { upstreamStatus:400, ...detail });
+      }
+      if(upstream.status===408||upstream.status===504) throw Object.assign(new Error(`AI通道自身返回 HTTP ${upstream.status} 超时。延长工具等待上限不能延长中转自身的限制；资料已保留，请向通道核对排队和响应时间。`),{upstreamStatus:upstream.status,diagnostic:'upstream_timeout'});
+      if(upstream.status===429) throw new Error('模型通道限流或额度不足，请稍后重试。');
+      throw new Error(`模型接口返回${upstream.status}，请检查URL、模型名称和图片能力。`);
     }
-    if(upstream.status===429) throw new Error('模型通道限流或额度不足，请稍后重试。');
-    throw new Error(`模型接口返回${upstream.status}，请检查URL、模型名称和图片能力。`);
+    const raw = await upstream.text();
+    signal.throwIfAborted();
+    phase = 'parsing_response';
+    if(raw.length>1000000) throw new Error('模型返回内容过大，请精简资料后重试。');
+    let payload;
+    try { payload=JSON.parse(raw); } catch { throw new Error('模型返回的不是非流式JSON，请核对接口协议和流式要求。'); }
+    return extractModelText(payload, provider.protocol);
+  } catch(error) {
+    if(signal.aborted && (error?.name==='TimeoutError'||error?.name==='AbortError')) {
+      throw Object.assign(new Error(`模型请求达到 ${Math.round(timeoutMs/1000)} 秒等待上限，资料已保留。请降低推理强度、缩短资料，或检查中转排队；不会自动重试。`),{name:'TimeoutError',diagnostic:'request_timeout'});
+    }
+    throw error;
+  } finally {
+    if(context)Object.assign(context.details,{timeoutMs,elapsedMs:Math.round(performance.now()-started),phase});
   }
-  const raw = await upstream.text();
-  if(raw.length>1000000) throw new Error('模型返回内容过大，请精简资料后重试。');
-  let payload;
-  try { payload=JSON.parse(raw); } catch { throw new Error('模型返回的不是非流式JSON，请核对接口协议和流式要求。'); }
-  return extractModelText(payload, provider.protocol);
 }
 
 function sendFailure(response,error) {
   let status=502;
   let message=error instanceof Error?error.message:'模型请求失败';
   if(error?.name==='ZodError'){status=400;message='输入材料格式不正确或超过限制，请检查后重试。';}
-  else if(error?.name==='TimeoutError'||error?.name==='AbortError'){status=504;message='模型请求超时，资料已保留，请重试。';}
+  else if(error?.diagnostic==='upstream_timeout'){status=504;}
+  else if(error?.name==='TimeoutError'||error?.name==='AbortError'){status=504;message=error.diagnostic==='request_timeout'?error.message:'模型请求超时，资料已保留，请重试。';}
   else if(error?.name==='SyntaxError')message='模型返回内容不是有效JSON，请核对接口协议后重试。';
-  else if(![400,401,403].includes(error?.upstreamStatus))status=/尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL|CF_API_REASONING_EFFORT/.test(message)?400:502;
+  else if(![400,401,403].includes(error?.upstreamStatus))status=/尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL|CF_API_REASONING_EFFORT|AI_REQUEST_TIMEOUT_MS/.test(message)?400:502;
   const context=response.locals.aiDiagnostics;
   const extra={
     ...(context?{requestId:context.requestId,diagnostics:context.details}:{}),
-    ...([400,401,403].includes(error?.upstreamStatus)?{upstreamStatus:error.upstreamStatus}:{}),
+    ...([400,401,403,408,504].includes(error?.upstreamStatus)?{upstreamStatus:error.upstreamStatus}:{}),
     ...(error?.diagnostic?{diagnostic:error.diagnostic}:{}),
     ...(error?.upstreamCode?{upstreamCode:error.upstreamCode}:{}),
     ...(error?.upstreamParam?{upstreamParam:error.upstreamParam}:{}),

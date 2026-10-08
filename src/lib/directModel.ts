@@ -1,3 +1,4 @@
+import { DEFAULT_AI_TIMEOUT_MS, parseAiTimeoutMs } from '../../shared/requestTimeout';
 import type { ModelConfig } from '../types';
 import type { CompletionMessage } from '../../shared/generation';
 import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest } from '../../shared/modelProtocol';
@@ -8,13 +9,14 @@ export function normalizeDirectUrl(input: string, pageProtocol?: string): string
   return url.toString();
 }
 
-export async function requestDirectModel(config: ModelConfig, messages: CompletionMessage[], signal?: AbortSignal): Promise<string> {
+export async function requestDirectModel(config: ModelConfig, messages: CompletionMessage[], signal?: AbortSignal, options: {timeoutMs?:number} = {}): Promise<string> {
   const url=normalizeDirectUrl(config.url,typeof window==='undefined'?undefined:window.location.protocol);
   const {protocol}=resolveModelEndpoint(url);
   const model=config.model.trim();if(!model)throw new Error('请填写自定义模型名称。');
   const headers:Record<string,string>={'Content-Type':'application/json'};
   if(config.apiKey.trim())headers.Authorization=`Bearer ${config.apiKey.trim()}`;
-  const timeout=AbortSignal.timeout(90_000);
+  const timeoutMs=parseAiTimeoutMs(options.timeoutMs??DEFAULT_AI_TIMEOUT_MS);
+  const timeout=AbortSignal.timeout(timeoutMs);
   const combined=signal?AbortSignal.any([signal,timeout]):timeout;
   try{
     // This is deliberately a browser-to-provider request: never proxy or retry via /api.
@@ -26,6 +28,7 @@ export async function requestDirectModel(config: ModelConfig, messages: Completi
         if(raw.length<=64000){try{data=JSON.parse(raw);}catch{/* Ignore untrusted error bodies. */}}
         throw new Error(`自定义通道请求被拒绝（上游 HTTP 400）。${describeBadRequest(data).hint}`);
       }
+      if(response.status===408||response.status===504)throw new Error(`自定义通道自身返回 HTTP ${response.status} 超时，请向通道核对排队与响应限制；不会自动重试。`);
       if(response.status===429)throw new Error('自定义通道限流或额度不足，请稍后重试。');
       throw new Error(`自定义通道返回${response.status}，请检查URL、模型名称和图片能力。`);
     }
@@ -35,7 +38,7 @@ export async function requestDirectModel(config: ModelConfig, messages: Completi
     return extractModelText(payload,protocol);
   }catch(error){
     if(signal?.aborted)throw error;
-    if(timeout.aborted)throw new Error('模型请求超时，资料已保留，请重试。');
+    if(timeout.aborted)throw new Error(`模型请求达到 ${Math.round(timeoutMs/1000)} 秒等待上限，资料已保留，请缩短资料或降低推理强度；不会自动重试。`);
     if(error instanceof TypeError)throw new Error('浏览器无法连接自定义通道：请检查网络、接口URL和重定向，并确认通道允许本站的跨域访问（CORS）。不会自动转发到我们的后端。');
     throw error;
   }

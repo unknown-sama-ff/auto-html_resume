@@ -312,3 +312,9 @@ test('unknown upstream400 displays diagnostics and request id rather than swallo
   await page.goto('/');await page.locator('.intake-card textarea').first().fill('不要丢失的个人资料');await page.locator('.intake-card textarea').nth(1).fill('岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
   const alert=page.getByRole('alert');await expect(alert).toContainText('上游 HTTP 400');await expect(alert).toContainText('chat_completions');await expect(alert).toContainText('medium');await expect(alert).toContainText('abcdef1');await expect(alert).toContainText('11111111-2222-4333-8444-555555555555');await expect(page.locator('.intake-card textarea').first()).toHaveValue('不要丢失的个人资料');
 });
+
+test('local deadline feedback displays elapsed time, stage and high effort without losing materials',async({page})=>{
+  await page.route('**/api/ai/generate',route=>route.fulfill({status:504,json:{error:'模型请求达到 240 秒等待上限，资料已保留。不会自动重试。',diagnostic:'request_timeout',requestId:'11111111-2222-4333-8444-555555555555',diagnostics:{model:'gpt-6.1-sol',protocol:'chat_completions',reasoningEffort:'high',timeoutMs:240000,elapsedMs:240100,phase:'waiting_response',hasImages:false,version:'abcdef1'}}}));
+  await page.goto('/');await page.locator('.intake-card textarea').first().fill('超时后保留个人资料');await page.locator('.intake-card textarea').nth(1).fill('超时后保留岗位');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  const alert=page.getByRole('alert');await expect(alert).toContainText('应用 HTTP 504');await expect(alert).toContainText('等待上限 240秒');await expect(alert).toContainText('耗时 240.1秒');await expect(alert).toContainText('等待通道响应');await expect(alert).toContainText('high');await expect(page.locator('.intake-card textarea').first()).toHaveValue('超时后保留个人资料');await expect(page.locator('.resume-paper')).toHaveCount(0);
+});

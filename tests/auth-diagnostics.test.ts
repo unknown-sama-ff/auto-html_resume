@@ -144,3 +144,35 @@ test('unknown upstream400 carries visible safe context and a trace that matches 
     const health=await (await fetch(app.url+'/api/health')).json();assert.equal(health.version,'abcdef1');assert.equal(health.diagnosticsVersion,1);assert.equal(calls,1);
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
+
+test('configured deadline aborts a slow upstream once and reports waiting phase/elapsed without leaking data',async()=>{
+  let calls=0;const upstream=http.createServer((request,response)=>{
+    calls++;request.resume();const timer=setTimeout(()=>{response.writeHead(200,{'Content-Type':'application/json'});response.end(JSON.stringify({choices:[{message:{content:JSON.stringify({jobTitle:'测试岗位',resume:{name:'测试用户',role:'测试岗位'},report:{summary:'测试',requirements:[]}})}}]}));},1500);
+    response.on('close',()=>clearTimeout(timer));
+  });
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw Error('No upstream port');
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_REQUEST_TIMEOUT_MS:'1000',CF_API_REASONING_EFFORT:'high'});
+  try{
+    const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,504);
+    const payload=await response.json();assert.equal(payload.diagnostic,'request_timeout');assert.equal(payload.diagnostics.timeoutMs,1000);assert.equal(payload.diagnostics.phase,'waiting_response');assert.ok(payload.diagnostics.elapsedMs>=900);assert.equal(payload.diagnostics.reasoningEffort,'high');assert.equal(calls,1);
+    for(const text of [fakeKey,generationBody.profileText]){assert.ok(!JSON.stringify(payload).includes(text));assert.ok(!app.logs.join('').includes(text));}
+  }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('request timeout also covers slow response-body reading, not just connection headers',async()=>{
+  let calls=0;const upstream=http.createServer((request,response)=>{
+    calls++;request.resume();response.writeHead(200,{'Content-Type':'application/json'});response.flushHeaders();response.write('{"choices":');
+    const timer=setTimeout(()=>response.end('[]}'),1500);response.on('close',()=>clearTimeout(timer));
+  });
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw Error('No upstream port');
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_REQUEST_TIMEOUT_MS:'1000'});
+  try{const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,504);const payload=await response.json();assert.equal(payload.diagnostic,'request_timeout');assert.equal(payload.diagnostics.phase,'reading_response');assert.equal(calls,1);assert.ok(payload.diagnostics.elapsedMs>=900);}
+  finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('upstream gateway504 is not confused with the tools own deadline',async()=>{
+  let calls=0;const upstream=http.createServer((request,response)=>{calls++;request.resume();response.writeHead(504,{'Content-Type':'application/json'});response.end(JSON.stringify({message:fakeKey}));});
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw Error('No upstream port');const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey);
+  try{const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,504);const payload=await response.json();assert.equal(payload.upstreamStatus,504);assert.equal(payload.diagnostic,'upstream_timeout');assert.equal(payload.diagnostics.timeoutMs,240000);assert.match(payload.error,/通道自身/);assert.ok(!JSON.stringify(payload).includes(fakeKey));assert.equal(calls,1);}
+  finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});

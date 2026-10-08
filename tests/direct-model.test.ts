@@ -52,3 +52,14 @@ test('custom Responses URL goes directly to provider with input/store=false and 
   assert.equal((await requestGeneration(responsesConfig,'测试资料','测试岗位',[],[])).resume.name,initialResume.name);
   const edit=await requestAIEdit(responsesConfig,'改颜色',getNodeMeta(initialResume,'profile-name'));assert.equal(edit.value,'#315A64');assert.equal(count,2);
 });
+
+test('direct timeout uses the same budget, aborts once and never forwards to our backend',async t=>{
+  let calls=0;t.mock.method(globalThis,'fetch',async (input:string,init:RequestInit)=>{
+    calls++;assert.equal(input,'https://provider.example/v1/chat/completions');
+    return await new Promise<Response>((resolve,reject)=>{
+      const safeguard=setTimeout(()=>resolve(new Response('{}')),2000);
+      init.signal?.addEventListener('abort',()=>{clearTimeout(safeguard);reject(init.signal?.reason);},{once:true});
+    });
+  });
+  await assert.rejects(requestDirectModel(config,[{role:'user',content:'test'}],undefined,{timeoutMs:1000}),/1 秒等待上限.*不会自动重试/);assert.equal(calls,1);
+});
