@@ -1,114 +1,98 @@
 # folio atelier
 
-一个可开源部署的 AI 岗位定制简历工作台：用户输入经历和岗位要求，生成岗位版本，然后在 A4 预览中点击元素，用自然语言、可视化属性或受控代码上下文继续修改。
+面向个人求职者的AI岗位简历工具，React + TypeScript + Vite前端与Express后端合并部署于Railway。
 
-## 已实现
+## 使用流程
 
-- React + TypeScript + Vite 前端工作台
-- 可点击的 A4 简历预览和稳定节点 ID
-- 结构化内容编辑、颜色、字号、间距和强调线调整
-- AI 修改预览：`selection -> prompt -> structured EditPatch -> confirm -> history`
-- 撤销、重做、本地 IndexedDB 保存多个版本
-- 受控代码片段查看和同步到聊天框
-- HTML 下载和浏览器打印/PDF 导出
-- 浏览器内上传头像（默认只保存在本地）
-- 后端模型预设与自定义 OpenAI-compatible URL / Key / Model 设置
-- Railway-ready Express 服务，同时托管 `dist` 和 AI 代理接口
+1. 首次打开显示工具介绍，不自动创建示例版本。
+2. 粘贴个人经历和岗位要求，或上传材料。点击“AI模型”选择后端预设或自定义通道。
+3. 确认AI处理授权，点击生成。后端实际调用模型；失败保留输入，不用示例冒充生成结果。
+4. 生成成功进入工作台，点击区块修改内容或把样式片段发给AI。建议可预览、应用、撤销。
+5. 每个岗位版本独立保存内容、对话、岗位分析和修改历史。可以复制、切换、改名、恢复历史。
+6. 侧栏可收起；预览支持30%–150%缩放及放大视图，Esc退出。HTML/PDF导出位于顶部同一组。
 
-## 安全设计
+**示例仅在主动点击“体验示例”时创建，始终标注为示例。** 不要拿示例经历当作自己的真实简历投递。
 
-- 预设模型的真实 API Key 只放在后端环境变量中，前端只能看到名称、模型和 URL。
-- 自定义模型的 Key 仅随当前请求发送，不写入 IndexedDB、Cookie、导出 HTML 或日志。
-- 自定义 URL 默认必须命中 `ALLOWED_AI_HOSTS`，并拒绝 localhost、私网 IP、DNS 解析到私网的域名和重定向。
-- AI 只接收当前选中组件的最小上下文，不直接接收整个浏览器数据库。
-- 后端限制 JSON 请求体大小、模型调用超时和单 IP 请求频率。
-- AI 返回后端只接受白名单操作和属性，前端不会执行模型返回的 HTML、JavaScript 或任意 CSS。
+## 上传与导出边界
 
-> 如果确实需要在本地接入 Ollama 等私网模型，请在本地开发环境显式设置 `ALLOW_PRIVATE_AI_URLS=true`；生产 Railway 不建议开启。
+- TXT：≤200KB且≤45,000字。
+- PDF：≤10MB、最多15页、最多45,000字。浏览器提取文字后提交；扫描件请上传截图或粘贴文字。
+- 图片：PNG/JPEG/WebP，单张≤2MB。个人资料和岗位要求各支持一个文件，可配合补充文字。图片识别要求所选模型支持视觉输入。
+- 暂不解析Word/Excel，请先转成文字PDF或TXT。
+- 头像只加入本地简历，不作为AI的经历材料，不上传身份证/护照。
+- HTML自包含，使用和预览相同的渲染器，去除选择标记和远程字体依赖。
+- PDF按钮打开浏览器打印窗口，选择“另存为PDF”。缩放不会影响导出尺寸。当前不是服务器直接生成PDF文件。
+- 简历长内容支持自然打印分页，但不同浏览器的分页细节可能不同；导出前请检查打印预览。
+- 岗位匹配页显示模型在生成时给出的要求、材料依据和补充建议，不伪造匹配百分比，也不是录用预测。后续改写不会自动重做岗位分析。
 
-## 本地开发
+## 本地运行
+
+需要 **Node.js 22.18或更新版本，推荐Node.js 24**。
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-前端会在 `http://localhost:5173` 启动。没有后端时，聊天修改会自动使用本地演示补丁，不会上传简历。
-
-如需运行真实模型代理，在另一个终端启动：
+在另一个终端启动后端：
 
 ```bash
-copy .env.example .env
-# 编辑 .env，填入后端预设 Key
+cp .env.example .env
+# Windows PowerShell用 Copy-Item .env.example .env
+# 在.env中配置实际模型Key
 npm run dev:api
 ```
 
-Vite 会把 `/api` 请求代理到 `http://localhost:8787`。
+前端 `/api` 代理到后端8787端口。不要把真实Key提交到GitHub。
 
-## AI 模型设置
+## Railway环境变量
 
-### 后端预设
+内置默认预设为 `cf.api.fan / gpt-6.1-sol`。后端和前端共用一个服务。
 
-在 `.env` 或 Railway Variables 中配置：
-
-```bash
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4o-mini
-```
-
-前端的“AI 模型”按钮会读取 `/api/ai/presets`，但不会拿到 Key。
-
-### 自定义模型
-
-用户可以在网页中输入：
-
-- 完整 URL：例如 `https://api.openai.com/v1/chat/completions`，输入基础 `/v1` 也会自动补齐。
-- 模型名称：例如 `gpt-4o-mini`、`deepseek-chat` 或其他兼容模型。
-- API Key：仅存于当前浏览器会话，不会保存到本地工作区。
-
-为了降低 SSRF 和密钥滥用风险，自定义 URL 的域名必须先加入后端：
-
-```bash
-ALLOWED_AI_HOSTS=api.openai.com,api.deepseek.com,api.example.com
-```
-
-`AI_PRESETS_JSON` 可以把预设元数据改为你自己的模型列表。每个预设使用 `keyEnv` 引用 Railway 中的环境变量，不要在 JSON 中写入真实 Key：
-
-```bash
-AI_PRESETS_JSON=[{"id":"qwen","label":"Qwen","provider":"OpenAI-compatible","baseUrl":"https://dashscope.aliyuncs.com/compatible-mode/v1","model":"qwen-plus","keyEnv":"QWEN_API_KEY"}]
-QWEN_API_KEY=...
-```
-
-## Railway 部署
-
-1. 将项目推送到 GitHub。
-2. 在 Railway 从 GitHub 创建服务。
-3. 构建命令使用 `npm run build`，启动命令使用 `npm run start`。
-4. 配置 `OPENAI_API_KEY` 或自定义预设所需的环境变量。
-5. 将 Railway 域名加入 `CORS_ORIGIN`；生产同源部署时也可只保留前端域名。
-6. 若开放自定义模型服务，把对应的精确 hostname 加入 `ALLOWED_AI_HOSTS`。
-
-`railway.json` 已包含构建、启动和 `/api/health` 健康检查配置。
-
-## 开源说明
-
-仓库不应提交 `.env`、API Key、个人简历、头像或真实岗位文件。建议先检查：
-
-```bash
-git status
-```
-
-再提交代码。MIT License 见 `LICENSE`。
-
-## cf.api.fan / gpt-6.1-sol 预设
-
-项目内置了 `cf.api.fan · gpt-6.1-sol` 预设。Railway 只需要配置：
-
-```bash
-CF_API_KEY=你的第三方Key
+```env
 CF_API_BASE_URL=https://cf.api.fan/v1
 CF_API_MODEL=gpt-6.1-sol
+CF_API_KEY=在Railway填写真实Key
 ALLOWED_AI_HOSTS=cf.api.fan
+ALLOW_PRIVATE_AI_URLS=false
+AI_RATE_LIMIT=12
+CORS_ORIGIN=https://你的Railway公开域名
 ```
 
-真实 Key 只放在 Railway Variables，不要写入 `AI_PRESETS_JSON`、前端代码、`.env.example` 或 Git 提交。前端会通过 `/api/ai/presets` 读取预设名称和模型信息，但不会收到 Key。
+无需手动设PORT，Railway会注入。若已有Node版本覆盖变量，必须设为22.18或更新版本（推荐24）。现有CF_API_*配置可继续使用。
+
+构建：`npm run build`；启动：`npm run start`；健康检查：`/api/health`。`railway.json`已配置。
+
+可以使用`OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL`或`DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL / DEEPSEEK_MODEL`配置其他内置通道。`AI_PRESETS_JSON`会替换内置预设列表，例如：
+
+```env
+AI_PRESETS_JSON=[{"id":"cf-api-fan","label":"第三方通道","provider":"OpenAI-compatible","baseUrl":"https://cf.api.fan/v1","model":"gpt-6.1-sol","keyEnv":"CF_API_KEY","description":"后端预设"}]
+```
+
+`keyEnv`引用后端环境变量，不放真实Key。预设名称、模型、URL通过`/api/ai/presets`返回，不返回Key。
+
+自定义模型设置支持URL、Key、模型名。Key只存在当前前端会话，随当前请求临时发给后端，不进入IndexedDB、备份或HTML。自定义URL必须命中后端`ALLOWED_AI_HOSTS`；兼容OpenAI Chat Completions的请求/返回格式，基础URL会补齐`/chat/completions`。
+
+## 安全与隐私
+
+- 拒绝未允许域名、私网解析和重定向；请求体上限8MB；模型请求超时90秒；按IP限流。
+- 模型材料按数据而非指令处理；返回简历结构校验；局部修改仅允许受控属性和当前节点，不执行HTML/JS。
+- 原始文件在浏览器读取；图片按授权进入模型请求；后端不长期保存求职文件，不记录正文或Key。
+- 此工具没有登录或跨设备同步。本地资料不会因上传GitHub而备份；建议下载版本备份。
+- `ALLOW_PRIVATE_AI_URLS=true`仅用于管理员明确允许的本地模型开发，生产不建议开启。
+- 公开部署仍需按自己的成本/隐私需求设置访问控制、额度和部署策略，IP限流不能替代账号权限。
+
+## 测试
+
+```bash
+npm run lint
+npm test
+npm run build
+npm run test:e2e
+```
+
+Windows浏览器测试使用已安装的Edge；其他平台先运行`npx playwright install chromium`。测试包括资料提交/失败、TXT/PDF/图片读取、版本隔离、撤销、恢复、刷新、导航、手机布局、缩放、放大与导出一致性。
+
+端到端测试使用模拟模型响应验证接口集成，不代表实际第三方通道可用；上线时仍需配置有效Key并验证模型/视觉能力。
+
+MIT License。不要提交真实API Key、`.env`、用户简历、头像或日志。

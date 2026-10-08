@@ -1,4 +1,4 @@
-import type { ChatMessage, ResumeData, ResumeVersion } from './types';
+import type { ResumeData } from './types';
 
 export const DEFAULT_NODE_STYLE = {
   color: '#263633',
@@ -81,27 +81,6 @@ export const initialResume: ResumeData = {
     'project-2-description': { color: '#45514E', fontSize: 12, fontWeight: 500, marginBottom: 8, accent: false },
   },
 };
-
-export const initialVersions: ResumeVersion[] = [
-  { id: 'version-product', title: '产品设计师 / AI 工具', role: '产品设计师', updatedAt: '刚刚保存', accent: '#D96945', status: 'active' },
-  { id: 'version-growth', title: '增长设计 / B2B SaaS', role: '增长设计', updatedAt: '昨天 18:42', accent: '#8A9B83', status: 'draft' },
-  { id: 'version-ops', title: '运营设计 / 内容体验', role: '运营设计', updatedAt: '10 月 02 日', accent: '#B6A48A', status: 'archived' },
-];
-
-export const initialMessages: ChatMessage[] = [
-  {
-    id: 'message-welcome',
-    role: 'assistant',
-    content: '我已经读完这份简历。点击右侧预览中的任意模块，然后告诉我你想怎么改。颜色、间距、文案和模块顺序都可以用自然语言完成。',
-    meta: 'AI 编辑助手 · 已载入岗位上下文',
-  },
-  {
-    id: 'message-suggestion',
-    role: 'assistant',
-    content: '当前版本对“AI 产品设计”岗位的匹配度为 86%。建议把第一个项目的结果指标再前置一些，让你的产品思维更快被看见。',
-    meta: '岗位匹配 · 3 个可提升点',
-  },
-];
 
 export const fallbackPresets = [
   {

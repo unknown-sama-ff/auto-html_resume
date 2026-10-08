@@ -30,3 +30,7 @@ dist-ssr
 *.pem
 *.key
 
+
+test-results/
+playwright-report/
+.tmp/
