@@ -3,7 +3,7 @@ import { TIMEOUT_PHASES, MAX_AI_TIMEOUT_MS } from './requestTimeout.ts';
 export const DIAGNOSTICS_VERSION = 1;
 export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export const KNOWN_UPSTREAM_CODES = ['invalid_request_error','invalid_type','unsupported_parameter','unsupported_value','model_not_found','invalid_model','unsupported_model','context_length_exceeded','content_policy_violation','invalid_image','image_too_large'] as const;
-export const KNOWN_DIAGNOSTICS = ['unknown','protocol_mismatch','streaming_required','model_unavailable','image_unsupported','context_too_long','content_type','invalid_parameter','reasoning_parameter','request_timeout','upstream_timeout'] as const;
+export const KNOWN_DIAGNOSTICS = ['unknown','protocol_mismatch','streaming_required','model_unavailable','image_unsupported','context_too_long','content_type','invalid_parameter','reasoning_parameter','request_timeout','upstream_timeout','invalid_model_output'] as const;
 export function isSafeUpstreamParam(value: unknown): value is string {
   return typeof value === 'string' && /^(model|messages(?:\[\d{1,3}\])?(?:\.content(?:\[\d{1,3}\])?(?:\.image_url)?)?|input|stream|store|max_tokens|max_completion_tokens|image_url|temperature|reasoning|reasoning_effort|reasoning\.effort)$/.test(value);
 }

@@ -14,6 +14,12 @@ test('parameter errors retain known safe code and parameter in the displayed fee
   assert.match(detail,/unsupported_parameter/);assert.match(detail,/reasoning_effort/);
 });
 
+test('invalid model output is shown as a safe, actionable diagnostic category',()=>{
+  const detail=formatApiFailure({error:'模型返回的简历结构不完整或含非法样式，请重试。',diagnostic:'invalid_model_output',requestId:'11111111-2222-4333-8444-555555555555'},502,'fallback');
+  assert.match(detail,/类别 invalid_model_output/);
+  assert.ok(!detail.includes('resume') && !detail.includes('apiKey'));
+});
+
 test('reasoning rejection is not mislabeled as model unavailable',()=>{
   const parsed=describeBadRequest({error:{code:'unsupported_parameter',param:'reasoning_effort',message:'The model does not support reasoning_effort'}});
   assert.equal(parsed.diagnostic,'reasoning_parameter');assert.equal(parsed.upstreamParam,'reasoning_effort');assert.match(parsed.hint,/不等于模型不存在/);

@@ -28,6 +28,21 @@ test('AI generation requires both materials and safe data structures',()=>{
   assert.deepEqual(parseGeneration(JSON.stringify(result)).resume.name,initialResume.name);assert.equal(generationSchema.safeParse({resume:{name:'X'}}).success,false);
   assert.equal(resumeSchema.safeParse({...initialResume,nodeStyles:{x:{color:'url(javascript:evil)'}}}).success,false);
 });
+test('generation tolerates fenced or partial model JSON while dropping illegal style values',()=>{
+  const content = `Here is the resume:\n\`\`\`json\n${JSON.stringify({
+    jobTitle: '产品经理',
+    resume: { name: '李四', role: '产品经理', projects: [{ title: '项目A', description: '负责需求分析\n推动上线', style: { color: 'url(javascript:evil)' } }], design: { accentColor: 'javascript:evil', sectionGap: 999 }, nodeStyles: { 'project-1': { color: 'url(https://evil)', fontSize: 100 } } },
+    report: { summary: '基于材料', requirements: [] },
+  })}\n\`\`\``;
+  const parsed = parseGeneration(content);
+  assert.equal(parsed.jobTitle, '产品经理');
+  assert.equal(parsed.resume.name, '李四');
+  assert.equal(parsed.resume.projects[0].id, 'project-1');
+  assert.deepEqual(parsed.resume.projects[0].description, ['负责需求分析', '推动上线']);
+  assert.deepEqual(parsed.resume.nodeStyles, {});
+  assert.equal(parsed.resume.design.accentColor, '#D96945');
+  assert.equal(parsed.resume.design.sectionGap, 24);
+});
 test('patches reject wrong target, style injection and font overflow',()=>{
   const meta=getNodeMeta(initialResume,'project-1-title');const patch={id:'p',targetNodeId:meta.id,operation:'setStyle' as const,path:'style.color',value:'#315A64',preview:'改色',reason:'要求',requiresConfirmation:false};
   assert.equal(applyPatch(initialResume,patch).nodeStyles[meta.id].color,'#315A64');
