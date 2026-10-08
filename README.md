@@ -66,17 +66,41 @@ CORS_ORIGIN=https://你的Railway公开域名
 ### 两种AI接入方式
 
 - **作者预设6.1-sol**：无需用户填写URL或Key，后端使用上面的CF_API_*变量。预设Key从不发送到前端，页面不显示其他供应商选项。
-- **自定义URL**：用户在网页填写完整URL、模型名称和自己的API Key。Key只存在当前前端会话，随当前请求临时发给后端，不进入IndexedDB、备份或HTML。切换模式保留自定义输入；取消设置不会改变已保存选择。
+- **自定义URL**：用户在网页填写完整URL、模型名称和自己的API Key。浏览器将资料和Key直接发送给用户指定的模型服务，不经过我们的后端。Key只存在当前前端会话，不进入IndexedDB、备份或HTML。切换模式保留自定义输入；取消设置不会改变已保存选择。
 
-自定义URL仍须命中后端的`ALLOWED_AI_HOSTS`，兼容OpenAI Chat Completions的请求/返回格式。基础URL会补齐`/chat/completions`；管理员可以按需把额外的通道域名加入白名单。
+自定义URL由浏览器直接调用，不经过Railway后端、不使用后端域名白名单。接口需要兼容OpenAI Chat Completions，基础URL会补齐`/chat/completions`。在HTTPS网页上只能使用HTTPS接口。
 
 旧的`OPENAI_*`、`DEEPSEEK_*`和`AI_PRESETS_JSON`不再生效，可从Railway删除；现有`CF_API_*`变量保持兼容。`/api/ai/presets`只返回一个作者预设（id保持为`cf-api-fan`）。
 
+## 是否需要分开部署？
+
+不需要。一个Railway服务仍然同时提供静态网页和作者预设接口：
+
+- 作者预设：浏览器 → Railway后端（作者Key）→ 作者模型服务。
+- 自定义URL：浏览器（用户URL/Key/模型名）→ 用户自己的模型服务，资料不进入Railway后端。
+- 简历、版本、修改历史保存在用户浏览器中，不配置用户数据库或文件存储。
+
+### 自定义API必须允许浏览器跨域（CORS）
+
+模型接口所在服务器需要允许工具网站的Origin，并正确响应OPTIONS预检，例如以下响应头（将域名换成工具网站实际地址）：
+
+```http
+Access-Control-Allow-Origin: https://your-tool.up.railway.app
+Access-Control-Allow-Methods: POST, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type
+```
+
+这是配置在**用户的模型接口服务器**上的，不是工具的Railway `CORS_ORIGIN`变量。更改我们网站的CORS设置不能替第三方接口开启跨域。若无法控制该接口且服务商不支持CORS，则该通道不能从浏览器直连；页面会明确提示，不会发送资料到我们的后端兜底。参考MDN CORS文档：`https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS`。
+
+`ALLOWED_AI_HOSTS`只用于作者后端出站检查，自定义URL不需要部署者逐个加白名单。现有CF_API_*和Railway构建/启动设置不变。
+
 ## 安全与隐私
 
-- 拒绝未允许域名、私网解析和重定向；请求体上限8MB；模型请求超时90秒；按IP限流。
+- 作者预设：后端出站仍验证目标域名和私网解析，拒绝重定向；请求体上限8MB；请求超时90秒；按IP限流。
+- 自定义URL：浏览器直连，使用自己的Key、URL、模型名称；不携带Cookie、不发送Referrer、不跟随重定向，连接失败不自动回退到后端代理。
 - 模型材料按数据而非指令处理；返回简历结构校验；局部修改仅允许受控属性和当前节点，不执行HTML/JS。
-- 原始文件在浏览器读取；图片按授权进入模型请求；后端不长期保存求职文件，不记录正文或Key。
+- 原始文件在浏览器读取；简历版本、历史和备份位于本地浏览器。作者预设请求在后端内存中临时处理，不落库、不写求职文件、不记录正文或用户Key。后端仅保留作者环境变量及临时IP限流记录。
+- 自定义模式的资料和用户Key不经过我们的后端，但所选第三方模型服务的保存策略由该服务决定，工具不能保证第三方不保留请求。
 - 此工具没有登录或跨设备同步。本地资料不会因上传GitHub而备份；建议下载版本备份。
 - `ALLOW_PRIVATE_AI_URLS=true`仅用于管理员明确允许的本地模型开发，生产不建议开启。
 - 公开部署仍需按自己的成本/隐私需求设置访问控制、额度和部署策略，IP限流不能替代账号权限。

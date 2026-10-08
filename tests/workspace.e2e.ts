@@ -133,25 +133,35 @@ test('custom URL fields survive mode toggles; cancel leaves the author default a
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(received.mode).toBe('preset');expect(received.presetId).toBe('cf-api-fan');expect(received).not.toHaveProperty('apiKey');
 });
 
-test('saving custom URL sends the entered config without persisting its Key with resume data',async({page})=>{
-  let received:Record<string,unknown>={};
-  await page.route('**/api/ai/generate',route=>{received=route.request().postDataJSON().config;return route.fulfill({json:makeResult()});});
+test('custom generation and editing go directly to the user endpoint without sending Key or materials to backend',async({page})=>{
+  let calls=0;let serverCalls=0;let requestModel='';let authorization='';let profile='';
+  await page.route('**/api/ai/generate',route=>{serverCalls++;return route.fulfill({status:400,json:{error:'Custom data must not enter the app backend'}});});
+  await page.route('**/api/ai/edit',route=>{serverCalls++;return route.fulfill({status:400,json:{error:'Custom data must not enter the app backend'}});});
+  await page.route('https://api.example.com/v1/chat/completions',route=>{
+    if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'POST, OPTIONS','access-control-allow-headers':'Authorization, Content-Type'}});
+    calls++;const payload=route.request().postDataJSON();requestModel=payload.model;authorization=route.request().headers().authorization;profile=JSON.stringify(payload.messages);
+    const content=calls===1?makeResult():{id:'direct-edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'更新姓名色彩',preview:'姓名改为深蓝色',requiresConfirmation:false};
+    return route.fulfill({headers:{'access-control-allow-origin':'*'},json:{choices:[{message:{content:JSON.stringify(content)}}]}});
+  });
   await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'AI 模型设置'});
-  await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'AI 模型设置'});await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'保存模型选择'})).toBeDisabled();
-  await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1/chat/completions');
-  await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');
-  await dialog.getByLabel('API Key',{exact:false}).fill('test-custom-key');
-  await dialog.getByRole('button',{name:'保存模型选择'}).click();
+  await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1');await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');await dialog.getByLabel('API Key',{exact:false}).fill('test-custom-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
   await page.locator('.intake-card textarea').nth(0).fill('姓名：张雨');await page.locator('.intake-card textarea').nth(1).fill('岗位：数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
-  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
-  expect(received).toMatchObject({mode:'custom',url:'https://api.example.com/v1/chat/completions',model:'custom-test-model',apiKey:'test-custom-key'});
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(requestModel).toBe('custom-test-model');expect(authorization).toBe('Bearer test-custom-key');expect(profile).toContain('张雨');expect(serverCalls).toBe(0);
+  await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('把姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('姓名改为深蓝色');await page.getByRole('button',{name:'应用修改'}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');expect(calls).toBe(2);expect(serverCalls).toBe(0);
   await expect(page.locator('.save-state')).toHaveText('已本地保存');
-  const saved=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{
-    const request=indexedDB.open('folio-atelier',1);
-    request.onerror=()=>reject(request.error);
-    request.onsuccess=()=>{const db=request.result;const read=db.transaction('workspace','readonly').objectStore('workspace').get('resume-editor-state');read.onsuccess=()=>{resolve(JSON.stringify(read.result));db.close();};read.onerror=()=>{reject(read.error);db.close();};};
-  }));
+  const saved=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{const request=indexedDB.open('folio-atelier',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result;const read=db.transaction('workspace','readonly').objectStore('workspace').get('resume-editor-state');read.onsuccess=()=>{resolve(JSON.stringify(read.result));db.close();};read.onerror=()=>{reject(read.error);db.close();};};}));
   expect(saved).not.toContain('test-custom-key');expect(saved).not.toContain('custom-test-model');
+});
+
+test('custom connection failure preserves materials and never falls back to the backend',async({page})=>{
+  let backendRequests=0;
+  await page.route('**/api/ai/generate',route=>{backendRequests++;return route.fulfill({status:400,json:{error:'must not reach backend'}});});
+  await page.route('https://failure.example/v1/chat/completions',route=>route.abort('failed'));
+  await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'AI 模型设置'});await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
+  await dialog.getByLabel('完整 URL',{exact:false}).fill('https://failure.example/v1');await dialog.getByLabel('模型名称',{exact:true}).fill('own-model');await dialog.getByLabel('API Key',{exact:false}).fill('test-user-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
+  await page.locator('.intake-card textarea').nth(0).fill('保留的个人资料');await page.locator('.intake-card textarea').nth(1).fill('保留的岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  await expect(page.getByRole('alert')).toContainText('CORS');await expect(page.getByRole('alert')).toContainText('不会自动转发');await expect(page.locator('.intake-card textarea').first()).toHaveValue('保留的个人资料');expect(backendRequests).toBe(0);await expect(page.locator('.resume-paper')).toHaveCount(0);
 });

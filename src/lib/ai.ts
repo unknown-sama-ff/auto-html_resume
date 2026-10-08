@@ -1,4 +1,6 @@
 import { editPatchSchema } from '../../shared/contracts';
+import { buildEditMessages, parseEditPatch } from '../../shared/edit';
+import { requestDirectModel } from './directModel';
 import { DEFAULT_NODE_STYLE } from '../data';
 import type { ResumeData, SelectionMeta, EditPatch, ModelConfig } from '../types';
 export const cloneResume = (resume: ResumeData): ResumeData => structuredClone(resume);
@@ -71,7 +73,8 @@ export function applyPatch(resume: ResumeData, patch: EditPatch): ResumeData {
   return next;
 }
 export async function requestAIEdit(config: ModelConfig, instruction: string, selection: SelectionMeta, signal?: AbortSignal): Promise<EditPatch> {
-  const response=await fetch('/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({prompt:instruction,selection,config:{...config,apiKey:config.mode==='custom'?config.apiKey:undefined}})});
+  if(config.mode==='custom')return validatePatch(parseEditPatch(await requestDirectModel(config,buildEditMessages(instruction,selection),signal),selection.id),selection);
+  const response=await fetch('/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({prompt:instruction,selection,config:{mode:'preset',presetId:config.presetId}})});
   const payload: unknown=await response.json().catch(()=>null);
   if(!response.ok) throw new Error(payload && typeof payload==='object' && 'error' in payload && typeof payload.error==='string' ? payload.error : 'AI编辑失败，请重试。');
   if(!payload || typeof payload!=='object' || !('patch' in payload) || !payload.patch || typeof payload.patch!=='object') throw new Error('模型返回的数据格式不正确');

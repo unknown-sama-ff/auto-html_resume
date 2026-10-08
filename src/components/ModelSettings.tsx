@@ -49,7 +49,7 @@ export function ModelSettings({ config, presets, onChange, onClose, onSave }: {
         <input id="model-key" type="password" value={config.apiKey} autoComplete="off"
           onChange={event => onChange({ ...config, apiKey: event.target.value })} placeholder="你的通道Key"/>
         <div className="model-note"><ShieldCheck size={14}/>
-          <span>Key仅保存在当前会话并随请求发送，不写入本地简历。自定义域名需由部署者加入后端ALLOWED_AI_HOSTS白名单。</span>
+          <span>浏览器直接调用你填写的URL；Key和资料不会经过我们的后端，不写入本地简历。接口必须支持浏览器跨域（CORS），无需后端域名白名单。</span>
         </div>
         {!canSave && <p className="code-safe">请填写有效的HTTP(S)地址和模型名称。</p>}
       </div>}
