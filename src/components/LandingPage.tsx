@@ -1,11 +1,14 @@
 import { BriefcaseBusiness, FileText, LayoutTemplate, Settings2, ShieldCheck, Sparkles, Target, Upload, WandSparkles, RefreshCcw } from 'lucide-react';
 import type { ParsedMaterial } from '../lib/materials';
 import { SponsorButton } from './SponsorButton';
+import { TemplatePicker } from './TemplatePicker';
+import type { TemplateId } from '../../shared/design';
 type Props = {
   profileText:string;jobText:string;profileMaterial:ParsedMaterial|null;jobMaterial:ParsedMaterial|null;
   onProfile:(value:string)=>void;onJob:(value:string)=>void;onFile:(kind:'profile'|'job',file:File)=>void;
   onPhoto:(file:File)=>void;photo:string;busy:boolean;reading:boolean;error:string;consent:boolean;onConsent:(value:boolean)=>void;
   onStart:()=>void;onDemo:()=>void;onModels:()=>void;onOpenSidebar:()=>void;versionCount:number;sidebarExpanded:boolean;
+  templateId:TemplateId|'auto';onTemplate:(id:TemplateId|'auto')=>void;
 };
 export function LandingPage(p:Props){
   const ready=Boolean((p.profileText.trim()||p.profileMaterial?.text||p.profileMaterial?.image) && (p.jobText.trim()||p.jobMaterial?.text||p.jobMaterial?.image));
@@ -19,6 +22,7 @@ export function LandingPage(p:Props){
     {material?.text&&<details className="extracted-material"><summary>查看提取的文字</summary><pre>{material.text}</pre></details>}
     </div>;
   })}</section>
+  <section className="intake-design"><h2>选择简历的视觉方向</h2><p>让 AI 按岗位自主设计，或先选一种版式。生成后仍可切换和修改。</p><TemplatePicker value={p.templateId} onChange={p.onTemplate} allowAuto disabled={p.busy}/></section>
   <div className="photo-intake"><label className="upload-avatar-button"><Upload size={14}/>{p.photo?'已上传头像 · 点击更换':'上传证件照 / 职业头像（可选）'}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={p.busy||p.reading} onChange={e=>{const f=e.target.files?.[0];if(f)p.onPhoto(f);e.target.value='';}}/></label>{p.photo&&<img src={p.photo} alt="待使用头像"/>}<small>头像只加入本地简历，不作为AI经历材料。不要上传身份证或护照。</small></div>
   <label className="consent-line"><input type="checkbox" checked={p.consent} onChange={e=>p.onConsent(e.target.checked)}/><span>我同意将以上材料发给所选AI通道。作者预设由后端临时处理；自定义URL由浏览器直连，不经过后端。简历版本只保存在本浏览器。</span></label>
   {p.error&&<div role="alert" className="workspace-alert intake-alert">{p.error} <button onClick={p.onModels}>检查模型设置</button></div>}

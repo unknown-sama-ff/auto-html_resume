@@ -1,5 +1,6 @@
 import type { ResumeData, ModelPreset } from './types';
 import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL, AUTHOR_MODEL, AUTHOR_BASE_URL } from '../shared/modelOptions';
+import { templateDesign } from '../shared/design';
 
 export const DEFAULT_NODE_STYLE = {
   color: '#263633',
@@ -60,27 +61,9 @@ export const initialResume: ResumeData = {
   ],
   education: [{ school: '同济大学', degree: '工业设计 · 学士', period: '2018 — 2022' }],
   awards: ['2023 · 中国设计智造大奖 · 入围', '2022 · 校级优秀毕业设计'],
-  design: {
-    accentColor: '#D96945',
-    inkColor: '#263633',
-    paperColor: '#FBF8F1',
-    sectionGap: 24,
-    avatarShape: 'circle',
-  },
-  nodeStyles: {
-    'profile-name': { color: '#193B35', fontSize: 37, fontWeight: 800, marginBottom: 8, accent: false },
-    'profile-role': { color: '#D96945', fontSize: 14, fontWeight: 700, marginBottom: 16, accent: false },
-    summary: { color: '#4B5955', fontSize: 13, fontWeight: 500, marginBottom: 0, accent: false },
-    'projects-section-title': { color: '#D96945', fontSize: 11, fontWeight: 800, marginBottom: 12, accent: true },
-    'experience-section-title': { color: '#D96945', fontSize: 11, fontWeight: 800, marginBottom: 12, accent: true },
-    'education-section-title': { color: '#D96945', fontSize: 11, fontWeight: 800, marginBottom: 12, accent: true },
-    'skills-section-title': { color: '#D96945', fontSize: 11, fontWeight: 800, marginBottom: 12, accent: true },
-    'awards-section-title': { color: '#D96945', fontSize: 11, fontWeight: 800, marginBottom: 12, accent: true },
-    'project-1-title': { color: '#263633', fontSize: 17, fontWeight: 800, marginBottom: 5, accent: false },
-    'project-2-title': { color: '#263633', fontSize: 17, fontWeight: 800, marginBottom: 5, accent: false },
-    'project-1-description': { color: '#45514E', fontSize: 12, fontWeight: 500, marginBottom: 8, accent: false },
-    'project-2-description': { color: '#45514E', fontSize: 12, fontWeight: 500, marginBottom: 8, accent: false },
-  },
+  customSections: [],
+  design: templateDesign('minimal'),
+  nodeStyles: {},
 };
 
 export const fallbackPresets: ModelPreset[] = [{

@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ResumePreview } from '../components/ResumePreview';
-import appCss from '../App.css?inline';
+import resumeCss from '../styles/resume.css?inline';
 import type { ResumeData } from '../types';
 export function renderResumeHtml(resume:ResumeData):string {
-  const css=appCss.replace(/@import\s+url\((?:[^)"']|"[^"]*"|'[^']*')*\)\s*;/gi,'');
+  const css=resumeCss;
   const markup=renderToStaticMarkup(<ResumePreview resume={resume} interactive={false}/>);
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>个人简历</title><style>${css}\nhtml,body{background:white;margin:0} .resume-paper-wrap{margin:0 auto;height:auto!important}.resume-paper{transform:none!important;position:static!important;box-shadow:none}.page-selection-control{display:none} @page{size:A4;margin:0} @media print{.resume-paper{padding:14mm;width:210mm;min-height:297mm;overflow:visible}.resume-node{outline:none!important;box-shadow:none!important}.resume-node::after{display:none!important}.resume-paper-wrap{width:210mm!important}.project-item,.experience-item,.education-item{break-inside:avoid}}</style></head><body>${markup}</body></html>`;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>个人简历</title><style>${css}\nhtml,body{background:white;margin:0} .resume-paper-wrap{margin:0 auto;height:auto!important}.resume-paper.resume-document{transform:none!important;position:static!important;box-shadow:none}</style></head><body>${markup}</body></html>`;
 }
 export function downloadResume(resume:ResumeData){const url=URL.createObjectURL(new Blob([renderResumeHtml(resume)],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`${resume.name.replace(/[\\/:*?"<>|]/g,'')}-resume.html`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 export function printResume(resume:ResumeData):Promise<void> {

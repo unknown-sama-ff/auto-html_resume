@@ -88,7 +88,7 @@ test('job screenshots reach the model as images rather than file names',async({p
 
 test('AI local patch is confirmed, undoable, and only contains selected context',async({page})=>{
   let sent:Record<string,unknown>={};await page.route('**/api/ai/edit',route=>{sent=route.request().postDataJSON();return route.fulfill({json:{patch:{id:'patch-test',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'按要求更新姓名色彩',preview:'姓名改为深蓝色',requiresConfirmation:false}}});});
-  await page.goto('/');await generate(page);await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('把姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('姓名改为深蓝色');await page.getByRole('button',{name:'应用修改'}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');expect(sent).not.toHaveProperty('resume');await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(25, 59, 53)');
+  await page.goto('/');await generate(page);await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('把姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('姓名改为深蓝色');await page.getByRole('button',{name:'应用修改'}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');expect(sent).not.toHaveProperty('resume');await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(41, 50, 59)');
 });
 
 test('exported HTML matches the styled preview and PDF prints that same standalone document',async({page})=>{
@@ -242,7 +242,7 @@ test('Escape cancels deletion and a late AI edit cannot restore a removed versio
   try{
     await remove.click();await dialog.getByRole('button',{name:'确认删除',exact:true}).click();await expect(page.locator('.version-select')).toHaveValue(first);
   }finally{release();}
-  await expect(page.locator('.version-item')).toHaveCount(1);await expect(page.locator('.patch-card')).toHaveCount(0);await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(25, 59, 53)');
+  await expect(page.locator('.version-item')).toHaveCount(1);await expect(page.locator('.patch-card')).toHaveCount(0);await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(41, 50, 59)');
   await expect(page.getByRole('textbox',{name:'AI修改要求'})).toHaveValue('');
 });
 

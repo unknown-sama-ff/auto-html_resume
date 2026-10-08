@@ -151,7 +151,7 @@ function sendFailure(response,error) {
 app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier',version:appVersion,diagnosticsVersion:DIAGNOSTICS_VERSION}));
 app.get('/api/ai/presets', (_request,response)=>response.json(getPresetDefinitions().map(publicPreset)));
 app.post('/api/ai/generate', async (request,response)=>{
-  try { assertRateLimit(request); const messages=buildGenerationMessages(request.body); const content=await requestModel(request.body.config,messages,response.locals.aiDiagnostics); return response.json(parseGeneration(content)); }
+  try { assertRateLimit(request); const messages=buildGenerationMessages(request.body); const content=await requestModel(request.body.config,messages,response.locals.aiDiagnostics); return response.json(parseGeneration(content, request.body.profileText, request.body.templateId)); }
   catch(error){return sendFailure(response,error);}
 });
 app.post('/api/ai/edit', async (request,response)=>{

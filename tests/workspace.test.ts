@@ -43,6 +43,44 @@ test('generation tolerates fenced or partial model JSON while dropping illegal s
   assert.equal(parsed.resume.design.accentColor, '#D96945');
   assert.equal(parsed.resume.design.sectionGap, 24);
 });
+
+test('generation keeps education, experience and awards when a gateway uses common aliases or string records',()=>{
+  const parsed = parseGeneration(JSON.stringify({
+    jobTitle: '工程管理实习生',
+    resume: {
+      name: '方昱',
+      role: '工程管理实习生',
+      education: [{ schoolName: '嘉兴南湖学院', major: '工程管理专业 | 本科', time: '2023.09 - 2027.06' }],
+      experience: [{ organization: '校团委', position: '办公室干事', date: '2023.09 - 2023.11 | 嘉兴', description: '参与活动筹备与资料整理' }],
+      awards: [{ name: '蓝桥杯Python程序设计大赛 | 省级三等奖' }],
+    },
+    report: { summary: '基于资料', requirements: [] },
+  }));
+  assert.deepEqual(parsed.resume.education, [{ school: '嘉兴南湖学院', degree: '工程管理专业 | 本科', period: '2023.09 - 2027.06' }]);
+  assert.deepEqual(parsed.resume.experience, [{ company: '校团委', role: '办公室干事', period: '2023.09 - 2023.11 | 嘉兴', bullets: ['参与活动筹备与资料整理'] }]);
+  assert.deepEqual(parsed.resume.awards, ['蓝桥杯Python程序设计大赛 | 省级三等奖']);
+});
+
+test('generation drops empty placeholder records so blank sections are not rendered',()=>{
+  const parsed = parseGeneration(JSON.stringify({
+    jobTitle: '工程管理实习生',
+    resume: { name: '方昱', education: [{}, { school: '嘉兴南湖学院', degree: '工程管理专业', period: '2023.09 - 2027.06' }], experience: [{}] },
+    report: { summary: '', requirements: [] },
+  }));
+  assert.deepEqual(parsed.resume.education, [{ school: '嘉兴南湖学院', degree: '工程管理专业', period: '2023.09 - 2027.06' }]);
+  assert.deepEqual(parsed.resume.experience, []);
+});
+
+test('generation repairs omitted sections from tagged imported profile text',()=>{
+  const parsed = parseGeneration(JSON.stringify({
+    jobTitle: '工程管理实习生',
+    resume: { name: '方昱', education: [{}], experience: [{}], awards: [] },
+    report: { summary: '', requirements: [] },
+  }), `[教育背景]\n嘉兴南湖学院\n2023.09 - 2027.06\n工程管理专业 | 本科\n\n[组织与协调实践]\n校团委 | 办公室干事\n2023.09 - 2023.11 | 嘉兴\n参与活动筹备与资料整理\n\n[获奖与证书]\n全国计算机等级考试二级Python（优秀）；蓝桥杯Python程序设计大赛 | 省级三等奖`);
+  assert.equal(parsed.resume.education[0]?.school, '嘉兴南湖学院');
+  assert.equal(parsed.resume.experience[0]?.company, '校团委');
+  assert.deepEqual(parsed.resume.awards, ['全国计算机等级考试二级Python（优秀）', '蓝桥杯Python程序设计大赛 | 省级三等奖']);
+});
 test('patches reject wrong target, style injection and font overflow',()=>{
   const meta=getNodeMeta(initialResume,'project-1-title');const patch={id:'p',targetNodeId:meta.id,operation:'setStyle' as const,path:'style.color',value:'#315A64',preview:'改色',reason:'要求',requiresConfirmation:false};
   assert.equal(applyPatch(initialResume,patch).nodeStyles[meta.id].color,'#315A64');

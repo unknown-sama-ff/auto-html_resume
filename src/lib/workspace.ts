@@ -7,13 +7,14 @@ export const versionSchema = z.object({
   id: z.string(), title: z.string(), role: z.string(), updatedAt: z.string(), accent: z.string(), status: z.enum(['active', 'draft', 'archived']),
   resume: resumeSchema, messages: z.array(messageSchema).max(200), past: z.array(resumeSchema).max(40), future: z.array(resumeSchema).max(40), history: z.array(operationSchema).max(40),
   jobText: z.string(), profileFileName: z.string(), jobFileName: z.string(), report: reportSchema.nullable(), warnings: z.array(z.string()), isDemo: z.boolean(),
+  profileText: z.string().max(50000).default(''),
 });
 const workspaceSchema = z.object({ schemaVersion: z.literal(2), activeVersionId: z.string().nullable(), versions: z.array(versionSchema).max(50) });
 export const emptyWorkspace: WorkspaceState = { schemaVersion: 2, activeVersionId: null, versions: [] };
-export function makeVersion(result: GenerationResult, details: { jobText?: string; profileFileName?: string; jobFileName?: string; isDemo?: boolean } = {}): ResumeVersion {
+export function makeVersion(result: GenerationResult, details: { jobText?: string; profileText?: string; profileFileName?: string; jobFileName?: string; isDemo?: boolean } = {}): ResumeVersion {
   return {
     id: crypto.randomUUID(), title: `${result.resume.name} · ${result.jobTitle}`, role: result.jobTitle, updatedAt: new Date().toISOString(), accent: result.resume.design.accentColor, status: 'active',
-    resume: structuredClone(result.resume), messages: [], past: [], future: [], history: [], jobText: details.jobText ?? '', profileFileName: details.profileFileName ?? '', jobFileName: details.jobFileName ?? '', report: result.report, warnings: result.warnings, isDemo: details.isDemo ?? false,
+    resume: structuredClone(result.resume), messages: [], past: [], future: [], history: [], jobText: details.jobText ?? '', profileText: details.profileText ?? '', profileFileName: details.profileFileName ?? '', jobFileName: details.jobFileName ?? '', report: result.report, warnings: result.warnings, isDemo: details.isDemo ?? false,
   };
 }
 export type WorkspaceAction =

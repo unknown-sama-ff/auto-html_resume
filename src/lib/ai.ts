@@ -2,10 +2,16 @@ import { formatApiFailure } from '../../shared/errorDiagnostics';
 import { editPatchSchema } from '../../shared/contracts';
 import { buildEditMessages, parseEditPatch } from '../../shared/edit';
 import { requestDirectModel } from './directModel';
-import { DEFAULT_NODE_STYLE } from '../data';
+import { isDesignPatch, type TemplateId } from '../../shared/design';
+import { applyTemplate, getBaseNodeStyle } from './design';
 import type { ResumeData, SelectionMeta, EditPatch, ModelConfig } from '../types';
 export const cloneResume = (resume: ResumeData): ResumeData => structuredClone(resume);
-export const getNodeStyle = (resume: ResumeData, id: string): Required<ResumeData['nodeStyles'][string]> => ({ ...DEFAULT_NODE_STYLE, ...(id==='page'?{color:resume.design.inkColor,marginBottom:resume.design.sectionGap}:{}), ...resume.nodeStyles[id] });
+export const getNodeStyle = (resume: ResumeData, id: string): Required<ResumeData['nodeStyles'][string]> => {
+  const style={...getBaseNodeStyle(resume,id),...resume.nodeStyles[id]};
+  if(id==='page')return style;
+  const page=resume.nodeStyles.page;
+  return {...style,color:page?.color??style.color,fontSize:style.fontSize*((page?.fontSize??14)/14),fontWeight:resume.nodeStyles[id]?.fontWeight??page?.fontWeight??style.fontWeight};
+};
 export function getNodeContent(resume: ResumeData, id: string): string {
   if (id === 'profile-name') return resume.name;
   if (id === 'profile-role') return resume.role;
@@ -13,6 +19,8 @@ export function getNodeContent(resume: ResumeData, id: string): string {
   if (id === 'summary') return resume.summary;
   if (id === 'skills') return resume.skills.map(s => `${s.label}${s.level ? ' | ' + s.level : ''}`).join('\n');
   if (id === 'awards') return resume.awards.join('\n');
+  const custom = id.match(/^custom-(.+)-(title|content)$/);
+  if (custom) { const item=resume.customSections.find(section=>section.id===custom[1]); return item ? custom[2]==='title' ? item.title : item.items.join('\n') : ''; }
   const project = id.match(/^project-(\d+)-(title|description)$/);
   if (project) { const item = resume.projects[Number(project[1])-1]; return item ? project[2] === 'title' ? item.title : item.description.join('\n') : ''; }
   const experience = id.match(/^experience-(\d+)$/);
@@ -29,6 +37,8 @@ export function updateContent(resume: ResumeData, id: string, value: string): Re
   if (id === 'summary') next.summary = value;
   if (id === 'skills') next.skills = lines.filter(Boolean).map(line => { const [label, level=''] = line.split('|').map(s=>s.trim()); return {label,level}; });
   if (id === 'awards') next.awards = lines.filter(Boolean);
+  const custom = id.match(/^custom-(.+)-(title|content)$/);
+  if (custom) { const item=next.customSections.find(section=>section.id===custom[1]); if(item) { if(custom[2]==='title') item.title=value; else item.items=lines.filter(Boolean); } }
   const p = id.match(/^project-(\d+)-(title|description)$/);
   if (p && next.projects[Number(p[1])-1]) { const item = next.projects[Number(p[1])-1]; if (p[2] === 'title') item.title=value; else item.description=lines.filter(Boolean); }
   const e = id.match(/^experience-(\d+)$/);
@@ -42,17 +52,25 @@ export function getNodeMeta(resume: ResumeData, id: string): SelectionMeta {
     page:{label:'整张简历',kind:'page'}, 'profile-name':{label:'姓名',kind:'name'}, 'profile-role':{label:'职业定位',kind:'role'}, 'profile-contact':{label:'联系方式（地点/邮箱/电话/网址各一行）',kind:'contact'}, 'profile-avatar':{label:'头像',kind:'avatar'}, summary:{label:'个人简介',kind:'summary'}, skills:{label:'技能（每行一项，级别用 | 分隔）',kind:'skills'}, awards:{label:'获奖情况',kind:'awards'},
   };
   let label = simple[id]?.label ?? id; let kind = simple[id]?.kind ?? 'section-title';
+  const custom=id.match(/^custom-(.+)-(title|content)$/);
+  if(custom) { const item=resume.customSections.find(section=>section.id===custom[1]); if(!item)throw new Error('该栏目已不存在，请重新选择。'); label=`${item.title} > ${custom[2]==='title'?'标题':'内容'}`;kind=custom[2]==='title'?'custom-title':'custom-content'; }
+  const known=simple[id] || ['projects','experience','education','skills','awards'].some(section=>id===`${section}-section-title`) || custom || /^project-(\d+)-(title|description)$/.test(id) && Boolean(resume.projects[Number(id.split('-')[1])-1]) || /^experience-\d+$/.test(id) && Boolean(resume.experience[Number(id.split('-')[1])-1]) || /^education-\d+$/.test(id) && Boolean(resume.education[Number(id.split('-')[1])-1]);
+  if(!known)throw new Error('未知的简历组件，已拒绝修改。');
   const p = id.match(/^project-(\d+)-(title|description)$/);
   if(p) { label = `项目经历 > ${resume.projects[Number(p[1])-1]?.title??''} > ${p[2]==='title'?'标题':'描述'}`; kind=p[2]==='title'?'project-title':'project-description'; }
   if(/^experience-\d+$/.test(id)){ label='工作经历（公司/岗位/时间/描述逐行填写）'; kind='experience'; }
   if(/^education-\d+$/.test(id)){ label='教育经历（学校/学位/时间逐行填写）'; kind='education'; }
   const style=getNodeStyle(resume,id);
-  return { id,label,breadcrumb:label,kind,path:id,content:getNodeContent(resume,id),style,code:`.${id} {\n  color: ${style.color};\n  font-size: ${style.fontSize}px;\n  font-weight: ${style.fontWeight};\n  margin-bottom: ${style.marginBottom}px;\n}` };
+  return { id,label,breadcrumb:label,kind,path:id,content:getNodeContent(resume,id),style,...(id==='page'?{design:resume.design}:{}),code:id==='page'?JSON.stringify(resume.design,null,2):`.${id} {\n  color: ${style.color};\n  font-size: ${style.fontSize}px;\n  font-weight: ${style.fontWeight};\n  margin-bottom: ${style.marginBottom}px;\n}` };
 }
 export function validatePatch(patch: EditPatch, selection: SelectionMeta): EditPatch {
   if(patch.targetNodeId!==selection.id) throw new Error('AI 修改目标与当前选择不一致，已拒绝。');
+  if(patch.operation==='setTheme') {
+    if(selection.kind!=='page'||!isDesignPatch(patch.path,patch.value))throw new Error('AI 返回了不受支持的整页设计。');
+    return {...patch,requiresConfirmation:true};
+  }
   if(patch.operation==='rewriteText') {
-    if(['page','avatar','section-title'].includes(selection.kind) || typeof patch.value!=='string' || patch.value.length>6000) throw new Error('该区块不能应用此文案修改。');
+    if(!['content.text','content.bullets'].includes(patch.path) || ['page','avatar','section-title'].includes(selection.kind) || typeof patch.value!=='string' || patch.value.length>6000) throw new Error('该区块不能应用此文案修改。');
     return {...patch,requiresConfirmation:true};
   }
   if(patch.operation!=='setStyle') throw new Error('不支持此修改操作。');
@@ -67,6 +85,10 @@ export function validatePatch(patch: EditPatch, selection: SelectionMeta): EditP
 }
 export function applyPatch(resume: ResumeData, patch: EditPatch): ResumeData {
   validatePatch(patch,getNodeMeta(resume,patch.targetNodeId));
+  if(patch.operation==='setTheme') {
+    if(patch.path==='design.templateId')return applyTemplate(resume,patch.value as TemplateId);
+    const next=cloneResume(resume);next.design={...next.design,[patch.path.slice(7)]:patch.value};return next;
+  }
   if(patch.operation==='rewriteText') return updateContent(resume,patch.targetNodeId,String(patch.value));
   const next=cloneResume(resume);
   if(patch.path==='design.avatarShape') next.design.avatarShape=patch.value==='circle'?'circle':'square';

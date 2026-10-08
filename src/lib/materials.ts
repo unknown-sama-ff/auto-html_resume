@@ -18,13 +18,42 @@ async function readTextFile(file: File): Promise<ParsedMaterial> {
   return { name: file.name, format: 'text', text: assertTextLength(await file.text()) };
 }
 
+function textWithBreaks(node: Node): string {
+  let result = '';
+  node.childNodes.forEach(child => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      result += child.textContent ?? '';
+      return;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) return;
+    const element = child as HTMLElement;
+    if (element.tagName === 'BR') {
+      result += '\n';
+      return;
+    }
+    if (element.matches('h2,.section-title,.section-heading') && element.textContent?.trim()) { result += `\n[${element.textContent.trim()}]\n`; return; }
+    const inline=/^(SPAN|STRONG|B|EM|A|SMALL|I|TIME|CODE)$/.test(element.tagName);
+    if(inline)result+=' ';
+    result += textWithBreaks(element);
+    if(inline)result+=' ';
+    if (/^(TD|TH)$/.test(element.tagName)) result += ' | ';
+    if (/^(ADDRESS|ARTICLE|ASIDE|BLOCKQUOTE|DIV|DL|DT|DD|FIGCAPTION|FIGURE|FOOTER|H[1-6]|HEADER|LI|MAIN|OL|P|PRE|SECTION|TABLE|TR|UL)$/.test(element.tagName)) result += '\n';
+  });
+  return result;
+}
+
+function cleanExtractedText(text: string) {
+  return text.replace(/\u00a0/g, ' ').split('\n').map(line => line.replace(/[ \t]+/g, ' ').trim()).filter((line, index, lines) => line || lines[index - 1]).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function htmlToText(html: string) {
   const document = new DOMParser().parseFromString(html, 'text/html');
   document.querySelectorAll('script,style,noscript,template,svg,canvas,iframe').forEach(node => node.remove());
   const title = document.title.trim();
   const body = document.body;
-  const text = body ? body.innerText || body.textContent || '' : document.documentElement.textContent || '';
-  return [title, text].filter(Boolean).join('\n');
+  if (!body) return title;
+
+  return [title, cleanExtractedText(textWithBreaks(body))].filter(Boolean).join('\n');
 }
 
 async function readHtmlFile(file: File): Promise<ParsedMaterial> {
@@ -56,7 +85,7 @@ async function readPdfFile(file: File): Promise<ParsedMaterial> {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      text += content.items.map(item => 'str' in item ? item.str : '').join(' ') + '\n';
+      text += content.items.map(item => 'str' in item ? item.str + ('hasEOL' in item && item.hasEOL ? '\n' : ' ') : '').join('') + '\n';
       if (text.length > MAX_TEXT_LENGTH) throw new Error('PDF 文字超过 45,000 字，请精简后上传。');
     }
     return { name: file.name, format: 'pdf', text: assertTextLength(text) };
