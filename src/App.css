@@ -661,3 +661,16 @@ textarea { resize: vertical; }
   .delete-version-name {margin-inline:15px;}
 }
 @media print {.sidebar-scrim,.delete-backdrop{display:none!important;}}
+
+/* Sponsor hover/touch card mirrors the reference project's local Alipay QR interaction. */
+.sponsor-control {position:relative;display:inline-flex;flex:0 0 auto;}
+.landing-topbar .sponsor-button {display:inline-flex;gap:6px;color:var(--accent);border-color:rgba(217,105,69,.45);background:transparent;box-shadow:0 0 18px rgba(217,105,69,.10);}
+.landing-topbar .sponsor-button:hover,.landing-topbar .sponsor-button.is-open {border-color:var(--accent);background:#fff4e9;box-shadow:0 0 18px rgba(217,105,69,.17);}
+.sponsor-tooltip-shell {position:fixed;z-index:40;padding-top:10px;max-height:var(--sponsor-max-height);}
+.sponsor-card {border:1px solid rgba(246,241,232,.65);border-radius:13px;padding:12px;background:#0d0a14;box-shadow:0 18px 48px rgba(20,17,25,.28);animation:sponsor-card-in 130ms ease-out;}
+.sponsor-qr-image {display:block;width:100%;height:auto;aspect-ratio:9/16;max-height:calc(var(--sponsor-max-height) - 72px);object-fit:contain;object-position:center;border-radius:9px;background:white;}
+.sponsor-card p {margin:10px 0 0;text-align:center;font-family:'Manrope','Microsoft YaHei',sans-serif;font-size:11px;line-height:1.7;color:rgba(246,241,232,.73);}
+.sponsor-image-error {padding:32px 12px;background:#fffaf0;color:#695d52;border-radius:8px;font-size:12px;line-height:1.7;}
+@keyframes sponsor-card-in {from {opacity:0;transform:translateY(-4px);}to {opacity:1;transform:translateY(0);}}
+@media(prefers-reduced-motion:reduce){.sponsor-card{animation:none;}}
+@media print{.sponsor-control{display:none!important;}}
