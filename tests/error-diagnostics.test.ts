@@ -1,0 +1,27 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { formatApiFailure, safeModelLabel, safeBuildVersion } from '../shared/errorDiagnostics';
+import { describeBadRequest, parseReasoningEffort } from '../shared/modelProtocol';
+
+test('unknown400 metadata remains visible on frontend without exposing arbitrary diagnostic fields',()=>{
+  const detail=formatApiFailure({error:'模型请求被拒绝',upstreamStatus:400,diagnostic:'unknown',requestId:'11111111-2222-4333-8444-555555555555',diagnostics:{protocol:'chat_completions',model:'gpt-6.1-sol',reasoningEffort:'medium',version:'abcdef123456',hasImages:false,apiKey:'not-to-display',rawBody:'private text'},upstreamCode:'a-private-key',upstreamParam:'private text'},502,'fallback');
+  assert.match(detail,/应用 HTTP 502/);assert.match(detail,/上游 HTTP 400/);assert.match(detail,/chat_completions/);assert.match(detail,/medium/);assert.match(detail,/纯文本/);assert.match(detail,/abcdef1/);assert.match(detail,/11111111-2222-4333-8444-555555555555/);
+  for(const text of ['not-to-display','private text','a-private-key'])assert.ok(!detail.includes(text));
+});
+
+test('parameter errors retain known safe code and parameter in the displayed feedback',()=>{
+  const detail=formatApiFailure({error:'参数不支持',upstreamStatus:400,diagnostic:'reasoning_parameter',upstreamCode:'unsupported_parameter',upstreamParam:'reasoning_effort'},502,'fallback');
+  assert.match(detail,/unsupported_parameter/);assert.match(detail,/reasoning_effort/);
+});
+
+test('reasoning rejection is not mislabeled as model unavailable',()=>{
+  const parsed=describeBadRequest({error:{code:'unsupported_parameter',param:'reasoning_effort',message:'The model does not support reasoning_effort'}});
+  assert.equal(parsed.diagnostic,'reasoning_parameter');assert.equal(parsed.upstreamParam,'reasoning_effort');assert.match(parsed.hint,/不等于模型不存在/);
+  assert.equal(describeBadRequest({error:{code:'model_not_found',param:'model'}}).diagnostic,'model_unavailable');
+});
+
+test('invalid reasoning environment value is caught locally and metadata does not expose a Key-shaped model',()=>{
+  assert.throws(()=>parseReasoningEffort('typo'),/CF_API_REASONING_EFFORT/);assert.equal(parseReasoningEffort('none'),'none');
+  assert.equal(safeModelLabel('sk-do-not-display'),undefined);assert.equal(safeModelLabel('same-secret','same-secret'),undefined);
+  assert.equal(safeBuildVersion('not a revision'),'unknown');
+});

@@ -1,4 +1,5 @@
 import type { CompletionMessage } from './generation.ts';
+import { REASONING_EFFORTS, KNOWN_UPSTREAM_CODES, isSafeUpstreamParam } from './errorDiagnostics.ts';
 
 export type ModelProtocol = 'chat_completions' | 'responses';
 export type ProtocolChoice = ModelProtocol | 'auto';
@@ -16,6 +17,11 @@ export function resolveModelEndpoint(input: string, choice: string = 'auto') {
   else if (explicitResponses) path = path.slice(0, -'/responses'.length);
   url.pathname = path + (protocol === 'responses' ? '/responses' : '/chat/completions');
   return { url, protocol };
+}
+
+export function parseReasoningEffort(value: unknown): ReasoningEffort {
+  if (typeof value !== 'string' || !REASONING_EFFORTS.includes(value as ReasoningEffort)) throw new Error('CF_API_REASONING_EFFORT 只支持 none、minimal、low、medium、high、xhigh。');
+  return value as ReasoningEffort;
 }
 
 export function buildModelRequest(model: string, messages: CompletionMessage[], protocol: ModelProtocol, reasoningEffort?: ReasoningEffort) {
@@ -65,13 +71,14 @@ export function describeBadRequest(payload: unknown) {
   const root = object(payload); const error = object(root?.error) ?? root;
   const message = typeof error?.message === 'string' ? error.message.toLowerCase() : typeof root?.error === 'string' ? root.error.toLowerCase() : '';
   const rawCode = typeof error?.code === 'string' ? error.code : typeof error?.type === 'string' ? error.type : '';
-  const knownCodes = ['invalid_request_error','invalid_type','unsupported_parameter','unsupported_value','model_not_found','invalid_model','unsupported_model','context_length_exceeded','content_policy_violation','invalid_image','image_too_large'];
-  const code = knownCodes.includes(rawCode) ? rawCode : undefined;
+  const code = KNOWN_UPSTREAM_CODES.includes(rawCode as typeof KNOWN_UPSTREAM_CODES[number]) ? rawCode : undefined;
   const rawParam = typeof error?.param === 'string' ? error.param : '';
-  const param = /^(model|messages(?:\[\d{1,3}\])?(?:\.content(?:\[\d{1,3}\])?(?:\.image_url)?)?|input|stream|store|max_tokens|image_url)$/.test(rawParam) ? rawParam : undefined;
+  const param = isSafeUpstreamParam(rawParam) ? rawParam : undefined;
   let diagnostic = 'unknown';
   let hint = '通道未接受请求参数。请先仅用短文本测试，再核对模型名称及接口协议。';
-  if (/responses/.test(message) && /only|must|use|support|endpoint|仅|使用|支持/.test(message)) {
+  if (param === 'reasoning_effort' || param === 'reasoning.effort' || (/reasoning_effort|reasoning\.effort/.test(message) && /unsupported|not support|unknown|invalid|不支持|无效/.test(message))) {
+    diagnostic = 'reasoning_parameter'; hint = '通道拒绝推理参数，不等于模型不存在。若参数是不支持，可将 CF_API_REASONING_EFFORT=none 后再部署测试；不要仅因此更换模型名称。';
+  } else if (/responses/.test(message) && /only|must|use|support|endpoint|仅|使用|支持/.test(message)) {
     diagnostic = 'protocol_mismatch'; hint = '通道提示应使用 Responses API。作者预设可设置 CF_API_PROTOCOL=responses；自定义URL请填写完整的 /v1/responses 地址。';
   } else if (/stream/.test(message) && /required|must|only|true|必须|开启/.test(message)) {
     diagnostic = 'streaming_required'; hint = '通道要求流式请求，当前使用非流式JSON返回；请确认此通道支持非流式或向服务商核对接入要求。';

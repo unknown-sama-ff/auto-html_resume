@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { buildGenerationMessages, parseGeneration } from './generation.mjs';
 import { getPresetDefinitions, publicPreset } from './presets.mjs';
 import { buildEditMessages, parseEditPatch } from '../shared/edit.ts';
-import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest } from '../shared/modelProtocol.ts';
+import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest, parseReasoningEffort } from '../shared/modelProtocol.ts';
 import cors from 'cors';
 import express from 'express';
 import fs from 'node:fs';
@@ -10,6 +10,8 @@ import path from 'node:path';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { appVersion, DIAGNOSTICS_VERSION, requestDiagnostics, logAiFailure } from './diagnostics.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
@@ -18,6 +20,15 @@ const distDir = path.resolve(rootDir, '..', 'dist');
 const rateWindowMs = 60_000;
 const maxRequestsPerWindow = Number(process.env.AI_RATE_LIMIT || 12);
 const requestLog = new Map();
+
+app.use((request,response,next)=>{
+  if(request.path.startsWith('/api')){
+    response.setHeader('Cache-Control','no-store');
+    const requestId=randomUUID();response.setHeader('X-App-Request-Id',requestId);
+    response.locals.aiDiagnostics={requestId,details:{version:appVersion}};
+  }
+  next();
+});
 
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8787').split(',').map((value) => value.trim()).filter(Boolean);
 const corsOptions = { origin: (origin, callback) => { if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true); return callback(new Error('Origin not allowed')); } };
@@ -66,11 +77,12 @@ function resolveProviderConfig(config = {}) {
   if (!apiKey) throw new Error(`Railway 尚未配置 ${preset.keyEnv}`);
   if (/^(REPLACE_WITH_|YOUR_|请|你的|在Railway)/i.test(apiKey) || apiKey === '...') throw new Error(`${preset.keyEnv} 仍是示例占位值，请在 Railway 填入真实令牌并重新部署。`);
   if (/\s/.test(apiKey) || /^Bearer\b/i.test(apiKey) || /['"]/.test(apiKey)) throw new Error(`${preset.keyEnv} 格式不正确：只填写令牌本身，不要包含 Bearer、引号或中间空格。`);
-  return { ...resolveModelEndpoint(preset.baseUrl, preset.protocol), model: preset.model, reasoningEffort: preset.reasoningEffort, apiKey };
+  return { ...resolveModelEndpoint(preset.baseUrl, preset.protocol), model: preset.model, reasoningEffort: parseReasoningEffort(preset.reasoningEffort), apiKey };
 }
 
-async function requestModel(config, messages) {
+async function requestModel(config, messages, context) {
   const provider = resolveProviderConfig(config);
+  if(context)context.details=requestDiagnostics(provider,messages);
   await assertSafeDestination(provider.url);
   const headers = { 'Content-Type': 'application/json' };
   if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
@@ -99,25 +111,34 @@ async function requestModel(config, messages) {
 }
 
 function sendFailure(response,error) {
-  if(error?.upstreamStatus===400) return response.status(502).json({error:error.message,upstreamStatus:400,diagnostic:error.diagnostic,...(error.upstreamCode?{upstreamCode:error.upstreamCode}:{}),...(error.upstreamParam?{upstreamParam:error.upstreamParam}:{})});
-  if(error?.upstreamStatus===401 || error?.upstreamStatus===403) return response.status(502).json({error:error.message,upstreamStatus:error.upstreamStatus});
-  if(error?.name==='ZodError') return response.status(400).json({error:'输入材料格式不正确或超过限制，请检查后重试。'});
-  if(error?.name==='TimeoutError' || error?.name==='AbortError') return response.status(504).json({error:'模型请求超时，资料已保留，请重试。'});
-  const message=error instanceof Error ? error.message : '模型请求失败';
-  const status= /尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL/.test(message) ? 400 : 502;
-  return response.status(status).json({error:message});
+  let status=502;
+  let message=error instanceof Error?error.message:'模型请求失败';
+  if(error?.name==='ZodError'){status=400;message='输入材料格式不正确或超过限制，请检查后重试。';}
+  else if(error?.name==='TimeoutError'||error?.name==='AbortError'){status=504;message='模型请求超时，资料已保留，请重试。';}
+  else if(error?.name==='SyntaxError')message='模型返回内容不是有效JSON，请核对接口协议后重试。';
+  else if(![400,401,403].includes(error?.upstreamStatus))status=/尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL|CF_API_REASONING_EFFORT/.test(message)?400:502;
+  const context=response.locals.aiDiagnostics;
+  const extra={
+    ...(context?{requestId:context.requestId,diagnostics:context.details}:{}),
+    ...([400,401,403].includes(error?.upstreamStatus)?{upstreamStatus:error.upstreamStatus}:{}),
+    ...(error?.diagnostic?{diagnostic:error.diagnostic}:{}),
+    ...(error?.upstreamCode?{upstreamCode:error.upstreamCode}:{}),
+    ...(error?.upstreamParam?{upstreamParam:error.upstreamParam}:{}),
+  };
+  if(context)logAiFailure(context,status,error);
+  return response.status(status).json({error:message,...extra});
 }
-app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier'}));
+app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier',version:appVersion,diagnosticsVersion:DIAGNOSTICS_VERSION}));
 app.get('/api/ai/presets', (_request,response)=>response.json(getPresetDefinitions().map(publicPreset)));
 app.post('/api/ai/generate', async (request,response)=>{
-  try { assertRateLimit(request); const messages=buildGenerationMessages(request.body); const content=await requestModel(request.body.config,messages); return response.json(parseGeneration(content)); }
+  try { assertRateLimit(request); const messages=buildGenerationMessages(request.body); const content=await requestModel(request.body.config,messages,response.locals.aiDiagnostics); return response.json(parseGeneration(content)); }
   catch(error){return sendFailure(response,error);}
 });
 app.post('/api/ai/edit', async (request,response)=>{
   try {
     assertRateLimit(request); const body=request.body;
     if(typeof body?.prompt!=='string' || !body.prompt.trim() || body.prompt.length>8000 || typeof body.selection?.id!=='string') return response.status(400).json({error:'请输入修改指令并选择简历元素。'});
-    const content=await requestModel(body.config,buildEditMessages(body.prompt,body.selection));
+    const content=await requestModel(body.config,buildEditMessages(body.prompt,body.selection),response.locals.aiDiagnostics);
     return response.json({patch:parseEditPatch(content,body.selection.id)});
   } catch(error){return sendFailure(response,error);}
 });

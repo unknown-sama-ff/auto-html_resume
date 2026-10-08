@@ -302,3 +302,13 @@ test('custom upstream400 gives a safe known hint and does not retry another inte
   await page.locator('.intake-card textarea').first().fill('个人资料保留');await page.locator('.intake-card textarea').nth(1).fill('岗位材料保留');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
   await expect(page.getByRole('alert')).toContainText('HTTP 400');await expect(page.getByRole('alert')).toContainText('模型');await expect(page.getByRole('alert')).not.toContainText('private detail');await expect(page.getByRole('alert')).not.toContainText('test-user-key');await expect(page.locator('.intake-card textarea').first()).toHaveValue('个人资料保留');expect(calls).toBe(1);expect(backendRequests).toBe(0);
 });
+
+test('unknown upstream400 displays diagnostics and request id rather than swallowing all extra fields',async({page})=>{
+  await page.route('**/api/ai/generate',route=>route.fulfill({status:502,json:{
+    error:'作者预设请求被拒绝（上游 HTTP 400）。通道未接受请求参数。',upstreamStatus:400,diagnostic:'unknown',
+    requestId:'11111111-2222-4333-8444-555555555555',
+    diagnostics:{protocol:'chat_completions',model:'gpt-6.1-sol',reasoningEffort:'medium',version:'abcdef1'},
+  }}));
+  await page.goto('/');await page.locator('.intake-card textarea').first().fill('不要丢失的个人资料');await page.locator('.intake-card textarea').nth(1).fill('岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  const alert=page.getByRole('alert');await expect(alert).toContainText('上游 HTTP 400');await expect(alert).toContainText('chat_completions');await expect(alert).toContainText('medium');await expect(alert).toContainText('abcdef1');await expect(alert).toContainText('11111111-2222-4333-8444-555555555555');await expect(page.locator('.intake-card textarea').first()).toHaveValue('不要丢失的个人资料');
+});

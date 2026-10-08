@@ -674,3 +674,6 @@ textarea { resize: vertical; }
 @keyframes sponsor-card-in {from {opacity:0;transform:translateY(-4px);}to {opacity:1;transform:translateY(0);}}
 @media(prefers-reduced-motion:reduce){.sponsor-card{animation:none;}}
 @media print{.sponsor-control{display:none!important;}}
+
+.workspace-alert {white-space:pre-line;overflow-wrap:anywhere;line-height:1.7;}
+.workspace-alert button {flex-shrink:0;}

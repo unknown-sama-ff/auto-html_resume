@@ -1,3 +1,4 @@
+import { formatApiFailure } from '../../shared/errorDiagnostics';
 import { editPatchSchema } from '../../shared/contracts';
 import { buildEditMessages, parseEditPatch } from '../../shared/edit';
 import { requestDirectModel } from './directModel';
@@ -76,7 +77,7 @@ export async function requestAIEdit(config: ModelConfig, instruction: string, se
   if(config.mode==='custom')return validatePatch(parseEditPatch(await requestDirectModel(config,buildEditMessages(instruction,selection),signal),selection.id),selection);
   const response=await fetch('/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({prompt:instruction,selection,config:{mode:'preset',presetId:config.presetId}})});
   const payload: unknown=await response.json().catch(()=>null);
-  if(!response.ok) throw new Error(payload && typeof payload==='object' && 'error' in payload && typeof payload.error==='string' ? payload.error : 'AI编辑失败，请重试。');
+  if(!response.ok) throw new Error(formatApiFailure(payload,response.status,'AI编辑失败，请重试。'));
   if(!payload || typeof payload!=='object' || !('patch' in payload) || !payload.patch || typeof payload.patch!=='object') throw new Error('模型返回的数据格式不正确');
   // All fields and paths are constrained again before application.
   const parsed=editPatchSchema.safeParse(payload.patch);

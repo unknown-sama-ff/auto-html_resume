@@ -1,3 +1,4 @@
+import { formatApiFailure } from '../../shared/errorDiagnostics';
 import { generationSchema } from '../../shared/contracts';
 import { buildGenerationMessages, parseGeneration } from '../../shared/generation';
 import { requestDirectModel } from './directModel';
@@ -11,8 +12,7 @@ export async function requestGeneration(config: ModelConfig, profileText: string
   const response = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal, body: JSON.stringify({ config: { mode:'preset',presetId:config.presetId }, profileText, jobText, profileImages, jobImages }) });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string' ? payload.error : '生成服务不可用，请检查模型设置并重试。';
-    throw new Error(error);
+    throw new Error(formatApiFailure(payload,response.status,'生成服务不可用，请检查模型设置并重试。'));
   }
   const result = generationSchema.safeParse(payload);
   if (!result.success) throw new Error('模型返回的简历数据不完整，原资料已保留，请重试。');

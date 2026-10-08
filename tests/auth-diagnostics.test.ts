@@ -24,13 +24,14 @@ async function localApp(url:string,key:string,extra:Record<string,string>={}) {
     cwd:process.cwd(),windowsHide:true,stdio:['ignore','pipe','pipe'],
     env:{...process.env,PORT:String(port),CF_API_BASE_URL:url,CF_API_MODEL:'test-model',CF_API_KEY:key,ALLOW_PRIVATE_AI_URLS:'true',ALLOWED_AI_HOSTS:'127.0.0.1',CF_API_PROTOCOL:'auto',...extra},
   });
+  const logs:string[]=[];child.stderr.on('data',data=>logs.push(String(data)));
   await new Promise<void>((resolve,reject)=>{
     const timer=setTimeout(()=>{child.kill();reject(new Error('Test server startup timeout'));},10000);
     child.once('error',error=>{clearTimeout(timer);reject(error);});
     child.once('exit',code=>{clearTimeout(timer);reject(new Error(`Server exited: ${code}`));});
     child.stdout.on('data',data=>{if(String(data).includes('server listening')){clearTimeout(timer);resolve();}});
   });
-  return {child,url:`http://127.0.0.1:${port}`};
+  return {child,url:`http://127.0.0.1:${port}`,logs};
 }
 const generationBody={config:{mode:'preset',presetId:'cf-api-fan'},profileText:'只用于测试的个人材料',jobText:'测试岗位'};
 const fakeKey='fake-author-test-key';
@@ -122,5 +123,24 @@ test('explicit Responses path supports generation and edit without auto-switchin
     const generation=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(generation.status,200);assert.equal((await generation.json()).resume.name,'Responses测试用户');
     const edit=await fetch(app.url+'/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:generationBody.config,prompt:'改姓名颜色',selection:{id:'profile-name'}})});assert.equal(edit.status,200);assert.equal((await edit.json()).patch.value,'#315A64');
     assert.equal(requests.length,2);for(const request of requests){assert.equal(request.path,'/v1/responses');assert.equal(request.body.store,false);assert.equal(request.body.stream,false);assert.ok(Array.isArray(request.body.input));assert.ok(!('messages' in request.body));}
+  }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('unknown upstream400 carries visible safe context and a trace that matches application logs',async()=>{
+  let calls=0;
+  const upstream=http.createServer((request,response)=>{
+    calls++;request.resume();response.writeHead(400,{'Content-Type':'application/json'});
+    response.end(JSON.stringify({error:{message:`unrecognized relay detail: ${fakeKey} ${generationBody.profileText}`,code:fakeKey,param:generationBody.profileText}}));
+  });
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{RAILWAY_GIT_COMMIT_SHA:'abcdef1234567890',CF_API_REASONING_EFFORT:'medium'});
+  try{
+    const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});
+    assert.equal(response.status,502);const payload=await response.json();assert.equal(payload.upstreamStatus,400);assert.equal(payload.diagnostic,'unknown');
+    assert.equal(payload.diagnostics.protocol,'chat_completions');assert.equal(payload.diagnostics.model,'test-model');assert.equal(payload.diagnostics.reasoningEffort,'medium');assert.equal(payload.diagnostics.version,'abcdef1');
+    assert.match(payload.requestId,/^[0-9a-f-]{36}$/);assert.equal(response.headers.get('x-app-request-id'),payload.requestId);
+    const log=app.logs.join('');assert.match(log,/\[ai-error\]/);assert.ok(log.includes(payload.requestId));assert.ok(log.includes('chat_completions'));assert.ok(log.includes('400'));
+    for(const forbidden of [fakeKey,generationBody.profileText,'unrecognized relay detail']){assert.ok(!JSON.stringify(payload).includes(forbidden));assert.ok(!log.includes(forbidden));}
+    const health=await (await fetch(app.url+'/api/health')).json();assert.equal(health.version,'abcdef1');assert.equal(health.diagnosticsVersion,1);assert.equal(calls,1);
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
