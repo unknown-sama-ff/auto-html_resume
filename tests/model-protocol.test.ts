@@ -53,3 +53,13 @@ test('reasoning effort is added only when configured and follows each protocol',
   const none=buildModelRequest('gpt-6.1-sol',messages,'chat_completions','none');assert.ok(!('reasoning_effort' in none));
   const responses=buildModelRequest('gpt-6.1-sol',messages,'responses','medium');assert.deepEqual(responses.reasoning,{effort:'medium'});assert.equal(responses.store,false);
 });
+
+test('unsupported non-streaming feature is not mistaken for a missing model id',()=>{
+  const result=describeBadRequest({error:{message:'Unsupported non-streaming requests for this model.'}});
+  assert.equal(result.diagnostic,'streaming_required');
+});
+
+test('supported non-streaming is not treated as a streaming requirement',()=>{
+  const result=describeBadRequest({error:{message:'This model only supports non-streaming requests.'}});
+  assert.notEqual(result.diagnostic,'streaming_required');assert.notEqual(result.diagnostic,'model_unavailable');
+});

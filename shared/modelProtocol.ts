@@ -80,12 +80,12 @@ export function describeBadRequest(payload: unknown) {
     diagnostic = 'reasoning_parameter'; hint = '通道拒绝推理参数，不等于模型不存在。若参数是不支持，可将 CF_API_REASONING_EFFORT=none 后再部署测试；不要仅因此更换模型名称。';
   } else if (/responses/.test(message) && /only|must|use|support|endpoint|仅|使用|支持/.test(message)) {
     diagnostic = 'protocol_mismatch'; hint = '通道提示应使用 Responses API。作者预设可设置 CF_API_PROTOCOL=responses；自定义URL请填写完整的 /v1/responses 地址。';
-  } else if (/stream/.test(message) && /required|must|only|true|必须|开启/.test(message)) {
+  } else if ((/non[- ]?stream(?:ing)?|非流式/.test(message) && /unsupported|not support|not available|不支持|不可用/.test(message)) || (!/non[- ]?stream(?:ing)?|非流式/.test(message) && /stream/.test(message) && /required|must|only|true|必须|开启/.test(message))) {
     diagnostic = 'streaming_required'; hint = '通道要求流式请求，当前使用非流式JSON返回；请确认此通道支持非流式或向服务商核对接入要求。';
-  } else if (/^(model_not_found|invalid_model|unsupported_model)$/.test(code ?? '') || ((param === 'model' || /model|模型/.test(message)) && /not found|does not exist|unsupported|invalid model|not available|没有|不存在|不支持|不可用/.test(message))) {
-    diagnostic = 'model_unavailable'; hint = '通道未识别或不支持该模型。请使用此API令牌所属分组的可用模型名称，不要根据网页展示名推断API名称。';
   } else if (/image|vision|图片|图像/.test(message) && /unsupported|not support|invalid|不支持|无法/.test(message)) {
     diagnostic = 'image_unsupported'; hint = '通道未接受图片输入。先不上传截图/图片，仅用文字或文字PDF/DOCX测试，或选择支持视觉的模型。';
+  } else if (/^(model_not_found|invalid_model|unsupported_model)$/.test(code ?? '') || ((param === 'model' || /model|模型/.test(message)) && /not found|does not exist|unsupported|invalid model|not available|没有|不存在|不支持|不可用/.test(message))) {
+    diagnostic = 'model_unavailable'; hint = '通道未识别或不支持该模型。请使用此API令牌所属分组的可用模型名称，不要根据网页展示名推断API名称。';
   } else if (/context_length_exceeded/.test(code ?? '') || /context.{0,30}(exceed|maximum)|too many tokens|上下文.*超|长度.*超/.test(message)) {
     diagnostic = 'context_too_long'; hint = '资料超过通道的上下文限制，请缩短个人材料和岗位要求后重试。';
   } else if (/content/.test(message) && /string/.test(message) && /expected|must|invalid type|需要|必须/.test(message)) {

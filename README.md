@@ -105,6 +105,31 @@ Railway的HTTP访问日志记录的是网关到应用的请求。`httpStatus=502
 
 这些字段用于确定拒绝发生在哪个边界，并不能代替实际服务商端的拒绝原因。不要把未知400猜成模型一定不存在；尤其是reasoning参数被拒绝时会单独标记`reasoning_parameter`。
 
+### 确认作者令牌对应的模型ID（只读）
+
+若页面已显示正确版本、纯文本、reasoning=none，仍报告`model_unavailable`，不要继续猜推理参数或随便替换模型名。该类别可能是错误文字的启发式分类；尤其没有上游错误码/参数时，不能据此断定官方模型不存在。
+
+项目提供管理员命令：
+
+```bash
+npm run check:model
+```
+
+此命令使用运行环境中的`CF_API_BASE_URL / CF_API_KEY / CF_API_MODEL`，**只发一次GET /v1/models**，不发生成请求、不发简历/聊天材料、不改环境变量，也不输出Key或错误原文。该脚本没有公开网页API入口。
+
+在Railway部署包含脚本的新提交后，可通过CLI进入对应服务执行（先完成Railway登录和项目关联）：
+
+```bash
+railway ssh --service auto-html_resume --environment production -- npm run check:model
+```
+
+结果中的`modelListed`：
+- `false`：列表未含配置的精确ID。请向中转确认API ID/别名与这个令牌的分组。不会自动换模型。
+- `true`：只证明ID在列表中，不保证此令牌/分组、路由、接口下有可用生成通道。若仍400，需服务商核查通道映射和对应请求日志。
+- `null`：列表接口未开放、认证失败或格式不兼容，无法据此判断模型能力。
+
+名单可以返回`modelIds`供管理员核对，但不要把Key或完整个人资料分享给其他人。标准模型列表格式参考官方Models API：`https://developers.openai.com/api/reference/resources/models/methods/list`。第三方中转可能展示全局模型列表而非当前Key授权范围，仍以其后台或服务商确认为准。
+
 ### 两种AI接入方式
 
 - **作者预设6.1-sol**：无需用户填写URL或Key，后端使用上面的CF_API_*变量。预设Key从不发送到前端，页面不显示其他供应商选项。

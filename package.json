@@ -12,7 +12,8 @@
     "dev:api": "node server/index.mjs",
     "preview:full": "npm run build && npm run start",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:model": "node scripts/check-model.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",
