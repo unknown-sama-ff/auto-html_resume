@@ -94,6 +94,12 @@ CORS_ORIGIN=https://你的Railway公开域名
 
 构建：`npm run build`；启动：`npm run start`；健康检查：`/api/health`。`railway.json`已配置。
 
+### 自定义域名与统一入口
+
+主入口为 `https://esjl.asia`。在同一 Railway 服务绑定 `esjl.asia` 和 `www.esjl.asia`，分别按 Railway 提示配置 DNS 解析并等待 HTTPS 证书生效。服务端会将 `www.esjl.asia` 的请求以 HTTP 308 永久跳转到主入口，保留原路径、查询参数和请求方法。Railway 部署使用平台提供的 `X-Forwarded-Host` 识别原访问域名；本地运行只检查 `Host`。主域名、Railway 原公开域名和健康检查保持可用。
+
+Railway 的 `CORS_ORIGIN` 至少包含 `https://esjl.asia`；若继续使用旧公开地址，可设为 `https://esjl.asia,https://auto-htmlresume-production.up.railway.app`，并保留其他仍使用的来源。跳转不迁移浏览器存储，原来在 www 或 Railway 地址保存的版本仍留在各自来源下。
+
 ### 作者预设报401/403时
 
 - 当前作者预设读取的是`CF_API_KEY`，不是`OPENAI_API_KEY`或浏览器自定义Key。

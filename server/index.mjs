@@ -23,6 +23,14 @@ const maxRequestsPerWindow = Number(process.env.AI_RATE_LIMIT || 12);
 const requestLog = new Map();
 
 app.use((request,response,next)=>{
+  const forwardedHost=process.env.RAILWAY_ENVIRONMENT_ID?request.get('X-Forwarded-Host'):undefined;
+  const host=forwardedHost||request.get('Host')||'';
+  if(!/^www\.esjl\.asia\.?(?::\d+)?$/i.test(host))return next();
+  const requestPath=request.originalUrl.startsWith('/')?request.originalUrl:`/${request.originalUrl}`;
+  return response.redirect(308,`https://esjl.asia${requestPath}`);
+});
+
+app.use((request,response,next)=>{
   if(request.path.startsWith('/api')){
     response.setHeader('Cache-Control','no-store');
     const requestId=randomUUID();response.setHeader('X-App-Request-Id',requestId);
