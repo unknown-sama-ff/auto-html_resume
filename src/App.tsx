@@ -7,6 +7,7 @@ import { applyPatch, cloneResume, getNodeMeta, requestAIEdit, updateContent } fr
 import { emptyWorkspace, makeVersion, migrateWorkspace, workspaceReducer } from './lib/workspace';
 import { loadWorkspace, saveWorkspace } from './lib/storage';
 import { readMaterial } from './lib/materials';
+import { readAvatarPhoto } from './lib/photos';
 import type { ParsedMaterial } from './lib/materials';
 import { requestGeneration } from './lib/generation';
 
@@ -36,6 +37,8 @@ export default function App(){
   const [pending,setPending]=useState<{patch:EditPatch;versionId:string;before:ResumeData}|null>(null);
   const [editing,setEditing]=useState(false);const editController=useRef<AbortController|null>(null);
   const [generating,setGenerating]=useState(false);const [reading,setReading]=useState(false);
+  const materialProcessing=useRef(false);
+  const [photoBusy,setPhotoBusy]=useState(false);const photoProcessing=useRef(false);
   const [error,setError]=useState('');const [lastSavedState,setLastSavedState]=useState<typeof state|null>(null);const [saveError,setSaveError]=useState('');
   const saveStatus=!hydrated?'正在载入本地版本…':saveError|| (lastSavedState===state?'已本地保存':'正在保存…');
   const [profileText,setProfileText]=useState('');const [jobText,setJobText]=useState('');
@@ -68,11 +71,28 @@ export default function App(){
     if(!active)return;const parsed=resumeSchema.safeParse(resume);if(!parsed.success){setError('内容或样式超出限制（姓名不能为空），请检查后保存。');return;}
     dispatch({type:'commit',id:active.id,resume:parsed.data,label,source});setPending(null);setError('');
   }
-  async function readFile(kind:'profile'|'job',file:File){setReading(true);setError('');try{const parsed=await readMaterial(file);if(kind==='profile')setProfileMaterial(parsed);else setJobMaterial(parsed);}catch(e){setError(errorText(e));}finally{setReading(false);}}
-  async function readPhoto(file:File,inEditor=false){setReading(true);setError('');try{const parsed=await readMaterial(file);if(!parsed.image)throw new Error('头像请选择PNG、JPEG或WebP图片。');if(inEditor&&active)commit({...active.resume,avatarDataUrl:parsed.image.dataUrl},'更换头像');else setPhoto(parsed.image.dataUrl);}catch(e){setError(errorText(e));}finally{setReading(false);}}
+  async function readFile(kind:'profile'|'job',file:File){
+    if(materialProcessing.current||photoProcessing.current)return;
+    materialProcessing.current=true;setReading(true);setError('');
+    try{const parsed=await readMaterial(file);if(kind==='profile')setProfileMaterial(parsed);else setJobMaterial(parsed);}
+    catch(e){setError(errorText(e));}finally{materialProcessing.current=false;setReading(false);}
+  }
+  async function readPhoto(file:File,inEditor=false){
+    if(photoProcessing.current||materialProcessing.current)return;
+    photoProcessing.current=true;setPhotoBusy(true);setError('');
+    const versionId=active?.id;const before=active?.resume;
+    try{
+      const dataUrl=await readAvatarPhoto(file);
+      if(inEditor){
+        const current=stateRef.current.versions.find(version=>version.id===versionId);
+        if(stateRef.current.activeVersionId!==versionId||!current||current.resume!==before)throw new Error('照片处理期间简历已切换或变动，请在当前版本重新上传。');
+        dispatch({type:'commit',id:current.id,resume:{...current.resume,avatarDataUrl:dataUrl},label:'更换头像',source:'manual'});setPending(null);
+      }else setPhoto(dataUrl);
+    }catch(e){setError(errorText(e));}finally{photoProcessing.current=false;setPhotoBusy(false);}
+  }
   function addVersion(version:ResumeVersion){if(stateRef.current.versions.length>=50){setError('本地版本达到50份，请先备份并整理。');return;}dispatch({type:'add',version});setSelectedId(null);setPending(null);setChat('');setView('workspace');setSidebarCollapsed(true);}
   async function generate(){
-    if(generating||reading||!consent)return;setGenerating(true);setError('');
+    if(generating||reading||materialProcessing.current||photoProcessing.current||!consent)return;setGenerating(true);setError('');
     try{
       const profile=[profileText,profileMaterial?.text].filter(Boolean).join('\n\n');const job=[jobText,jobMaterial?.text].filter(Boolean).join('\n\n');
       const result=await requestGeneration(config,profile,job,profileMaterial?.image?[profileMaterial.image]:[],jobMaterial?.image?[jobMaterial.image]:[],undefined,templateId);
@@ -108,11 +128,11 @@ export default function App(){
   }
   function backupVersions(){const url=URL.createObjectURL(new Blob([JSON.stringify(state)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='folio-versions-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   const isHome=view==='home'||!active;
-  const sidebar=<Sidebar view={isHome?'home':view} collapsed={sidebarCollapsed} versions={state.versions} activeVersionId={state.activeVersionId} busy={!hydrated||generating||reading} onToggle={()=>setSidebarCollapsed(value=>!value)} onNavigate={next=>{navigate(next);if(window.matchMedia('(max-width:930px)').matches)setSidebarCollapsed(true);}} onSelect={selectVersion} onDelete={setDeleteTargetId} onBackup={backupVersions}/>;
+  const sidebar=<Sidebar view={isHome?'home':view} collapsed={sidebarCollapsed} versions={state.versions} activeVersionId={state.activeVersionId} busy={!hydrated||generating||reading||photoBusy} onToggle={()=>setSidebarCollapsed(value=>!value)} onNavigate={next=>{navigate(next);if(window.matchMedia('(max-width:930px)').matches)setSidebarCollapsed(true);}} onSelect={selectVersion} onDelete={setDeleteTargetId} onBackup={backupVersions}/>;
   const deleteDialog=deleteTarget?<DeleteVersionDialog version={deleteTarget} onCancel={()=>setDeleteTargetId(null)} onConfirm={confirmDelete}/>:null;
   const sidebarScrim=!sidebarCollapsed?<button className="sidebar-scrim" aria-label="收起侧边栏背景" onClick={()=>setSidebarCollapsed(true)}/>:null;
   const modal=showModels?<ModelSettings config={draftConfig} presets={presets} onChange={setDraftConfig} onClose={()=>setShowModels(false)} onSave={()=>{setConfig({...draftConfig});setShowModels(false);}}/>:null;
-  if(isHome)return <div className={`app-shell home-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>{sidebar}<div className="app-main home-main"><LandingPage profileText={profileText} jobText={jobText} profileMaterial={profileMaterial} jobMaterial={jobMaterial} onProfile={setProfileText} onJob={setJobText} onFile={(kind,file)=>void readFile(kind,file)} onPhoto={file=>void readPhoto(file)} photo={photo} busy={generating||!hydrated} reading={reading} consent={consent} onConsent={setConsent} error={error} onStart={()=>void generate()} onDemo={demo} onModels={openModels} onOpenSidebar={()=>setSidebarCollapsed(false)} versionCount={state.versions.length} sidebarExpanded={!sidebarCollapsed} templateId={templateId} onTemplate={setTemplateId}/></div>{sidebarScrim}{modal}{deleteDialog}</div>;
+  if(isHome)return <div className={`app-shell home-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>{sidebar}<div className="app-main home-main"><LandingPage profileText={profileText} jobText={jobText} profileMaterial={profileMaterial} jobMaterial={jobMaterial} onProfile={setProfileText} onJob={setJobText} onFile={(kind,file)=>void readFile(kind,file)} onPhoto={file=>void readPhoto(file)} photo={photo} busy={generating||!hydrated} reading={reading||photoBusy} photoBusy={photoBusy} consent={consent} onConsent={setConsent} error={error} onStart={()=>void generate()} onDemo={demo} onModels={openModels} onOpenSidebar={()=>setSidebarCollapsed(false)} versionCount={state.versions.length} sidebarExpanded={!sidebarCollapsed} templateId={templateId} onTemplate={setTemplateId}/></div>{sidebarScrim}{modal}{deleteDialog}</div>;
   return <div className={`app-shell ${sidebarCollapsed?'sidebar-collapsed':''}`}>{sidebar}
   <main className="app-main"><header className="topbar"><div className="breadcrumbs"><select aria-label="选择简历版本" className="version-select" value={active.id} onChange={e=>selectVersion(e.target.value)}>{state.versions.map(v=><option key={v.id} value={v.id}>{v.title}</option>)}</select></div><div className="topbar-actions"><span className="save-state"><span className="save-dot"/>{saveStatus}</span><button className="icon-button" aria-label="撤销" disabled={!active.past.length} onClick={()=>{dispatch({type:'undo',id:active.id});setPending(null);}}><Undo2 size={16}/></button><button className="icon-button" aria-label="重做" disabled={!active.future.length} onClick={()=>{dispatch({type:'redo',id:active.id});setPending(null);}}><Redo2 size={16}/></button><button className="model-status-button" onClick={openModels}><Settings2 size={15}/>AI 模型</button><div className="export-actions"><button className="outline-button" onClick={()=>void import('./lib/export').then(exporter=>exporter.downloadResume(active.resume)).catch(e=>setError(errorText(e)))}><Download size={15}/>导出 HTML</button><button className="outline-button" onClick={()=>void pdf()}><FileText size={15}/>导出 PDF</button></div></div></header>
   {error&&<div className="workspace-alert" role="alert">{error}<button aria-label="关闭提示" onClick={()=>setError('')}><X size={14}/></button></div>}
@@ -127,7 +147,7 @@ export default function App(){
   <div className="conversation-card"><div className="conversation-heading"><span>本版本最近对话</span><button aria-label="查看修改历史" className="quiet-icon" onClick={()=>navigate('history')}><MoreHorizontal size={16}/></button></div>{active.messages.length===0?<p className="empty-conversation">先选中一个区块，再告诉AI你想如何调整。</p>:active.messages.slice(-4).map(m=><div className={`message-row ${m.role}`} key={m.id}><div className="message-copy"><small>{m.role==='user'?'你':'AI'}</small><p>{m.content}</p></div></div>)}</div>
   </div>
   <div className={`preview-column ${fullscreen?'is-fullscreen':''}`} role={fullscreen?'dialog':undefined} aria-modal={fullscreen||undefined} aria-label={fullscreen?'放大简历预览':undefined}><div className="preview-toolbar"><div><span className="panel-kicker">A4 CANVAS</span><strong>{pending&&previewSuggestion?'建议预览 · 尚未保存':'实时预览'}</strong></div><div className="preview-tools"><button className="zoom-step" aria-label="缩小预览" onClick={()=>setScale(v=>Math.max(.3,Number((v-.05).toFixed(2))))}><Minus size={13}/></button><input className="zoom-range" type="range" min=".3" max="1.5" step=".05" value={scale} onChange={e=>setScale(Number(e.target.value))} aria-label="预览缩放"/><span className="zoom-label">{Math.round(scale*100)}%</span><button className="zoom-step" aria-label="放大预览" onClick={()=>setScale(v=>Math.min(1.5,Number((v+.05).toFixed(2))))}><Plus size={13}/></button><button className="icon-button" aria-label={fullscreen?'退出全屏预览':'全屏预览'} onClick={()=>setFullscreen(v=>!v)}>{fullscreen?<X size={16}/>:<Maximize2 size={16}/>}</button></div></div><div className="preview-stage"><ResumePreview resume={previewResume??active.resume} selectedNodeId={selectedId??''} onSelect={id=>{editController.current?.abort();setEditing(false);setPending(null);setSelectedId(id);}} scale={scale}/></div><div className="preview-footer"><small>缩放只影响屏幕，导出使用真实A4尺寸。PDF通过打印窗口选择“另存为PDF”。</small></div></div>
-  {selection?<Inspector key={selection.id+selection.content} resume={active.resume} selection={selection} onContent={value=>commit(updateContent(active.resume,selection.id,value),`修改${selection.label}`)} onStyle={(key,value)=>{const next=cloneResume(active.resume);if(key==='avatarShape')next.design.avatarShape=value==='circle'?'circle':'square';else next.nodeStyles[selection.id]={...next.nodeStyles[selection.id],[key]:value};commit(next,`调整${selection.label}样式`);}} onCode={()=>setChat(`当前组件样式：\n${selection.code}\n\n我的修改要求：`)} onPhoto={file=>void readPhoto(file,true)}/>:<aside className="insight-column"><div className="insight-heading"><h2>选择器</h2></div><div className="empty-inspector"><MousePointer2 size={28}/><h3>选择要修改的区块</h3><p>点击简历中的姓名、项目、经历或技能，即可修改内容、颜色、字号和间距。</p></div></aside>}
+  {selection?<Inspector key={selection.id+selection.content} resume={active.resume} selection={selection} onContent={value=>commit(updateContent(active.resume,selection.id,value),`修改${selection.label}`)} onStyle={(key,value)=>{const next=cloneResume(active.resume);if(key==='avatarShape')next.design.avatarShape=value==='circle'?'circle':'square';else next.nodeStyles[selection.id]={...next.nodeStyles[selection.id],[key]:value};commit(next,`调整${selection.label}样式`);}} onCode={()=>setChat(`当前组件样式：\n${selection.code}\n\n我的修改要求：`)} onPhoto={file=>void readPhoto(file,true)} photoBusy={photoBusy}/>:<aside className="insight-column"><div className="insight-heading"><h2>选择器</h2></div><div className="empty-inspector"><MousePointer2 size={28}/><h3>选择要修改的区块</h3><p>点击简历中的姓名、项目、经历或技能，即可修改内容、颜色、字号和间距。</p></div></aside>}
   </section></>}
   </main>{fullscreen&&<button className="fullscreen-scrim" aria-label="关闭全屏背景" onClick={()=>setFullscreen(false)}/ >}{sidebarScrim}{modal}{deleteDialog}</div>;
 }

@@ -1,3 +1,4 @@
+import { readMaterialImage } from './photos';
 import type { MaterialImage } from '../types';
 
 export type MaterialFormat = 'text' | 'pdf' | 'docx' | 'html' | 'image';
@@ -98,14 +99,7 @@ async function readPdfFile(file: File): Promise<ParsedMaterial> {
 }
 
 async function readImageFile(file: File): Promise<ParsedMaterial> {
-  if (file.size > 2000000) throw new Error('图片请控制在 2 MB 内（PNG/JPEG/WebP）。');
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('图片读取失败'));
-    reader.onerror = () => reject(new Error('图片读取失败'));
-    reader.readAsDataURL(file);
-  });
-  const mimeType = file.type as MaterialImage['mimeType'];
+  const { mimeType, dataUrl } = await readMaterialImage(file);
   return { name: file.name, format: 'image', text: '', image: { name: file.name, mimeType, dataUrl } };
 }
 
