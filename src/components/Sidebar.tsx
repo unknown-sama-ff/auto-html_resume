@@ -15,7 +15,7 @@ export function Sidebar(p: Props) {
     { id: 'history', label: '修改历史', Icon: History },
   ] as const;
   return <aside className="side-rail" aria-label="简历侧边栏" id="resume-sidebar">
-    <div className="brand-lockup"><div className="brand-mark">f/a</div><div className="brand-copy"><strong>folio</strong><span>atelier</span></div></div>
+    <div className="brand-lockup"><div className="brand-mark" aria-hidden="true">e</div><div className="brand-copy"><strong>easy 简历</strong><span>AI RESUME STUDIO</span></div></div>
     <button className="sidebar-toggle" aria-label={p.collapsed ? '展开侧边栏' : '收起侧边栏'} aria-expanded={!p.collapsed} aria-controls="sidebar-versions" title={p.collapsed ? '展开侧边栏' : '收起侧边栏'} onClick={p.onToggle}>
       {p.collapsed ? <PanelLeftOpen size={16}/> : <PanelLeftClose size={16}/>}
     </button>

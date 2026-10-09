@@ -31,9 +31,9 @@ textarea { resize: vertical; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 238px minmax(0, 1fr); background: var(--paper); }
 .side-rail { min-height: 100vh; padding: 27px 18px 18px; background: var(--rail); color: #f5efe5; display: flex; flex-direction: column; }
 .brand-lockup { display: flex; align-items: center; gap: 10px; padding: 0 12px; }
-.brand-mark { display: flex; align-items: center; gap: 1px; color: var(--accent); font-family: Georgia, serif; font-size: 21px; font-style: italic; font-weight: 700; letter-spacing: -0.14em; }
+.brand-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 24px; color: var(--accent); font-family: Georgia, serif; font-size: 28px; font-style: italic; font-weight: 700; line-height: 1; }
 .brand-lockup strong, .brand-lockup span { display: block; line-height: 1; }
-.brand-lockup strong { font-size: 16px; letter-spacing: -0.04em; }
+.brand-lockup strong { font-size: 16px; letter-spacing: -0.04em; white-space: nowrap; }
 .brand-lockup div:last-child span { color: #8fab9e; font-size: 9px; letter-spacing: 0.2em; margin-top: 4px; text-transform: uppercase; }
 .rail-caption { display: flex; justify-content: space-between; padding: 42px 12px 13px; color: #85a499; font-size: 9px; letter-spacing: 0.17em; text-transform: uppercase; }
 .rail-caption span { color: var(--accent); }

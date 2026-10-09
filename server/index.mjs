@@ -148,7 +148,7 @@ function sendFailure(response,error) {
   if(context)logAiFailure(context,status,error);
   return response.status(status).json({error:message,...extra});
 }
-app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier',version:appVersion,diagnosticsVersion:DIAGNOSTICS_VERSION,generationVersion:GENERATION_VERSION}));
+app.get('/api/health', (_request,response)=>response.json({ok:true,service:'easy-resume',version:appVersion,diagnosticsVersion:DIAGNOSTICS_VERSION,generationVersion:GENERATION_VERSION}));
 app.get('/api/ai/presets', (_request,response)=>response.json(getPresetDefinitions().map(publicPreset)));
 app.post('/api/ai/generate', async (request,response)=>{
   try {
@@ -179,4 +179,4 @@ if (fs.existsSync(distDir)) {
   app.get(/^(?!\/api).*/, (_request, response) => response.sendFile(path.join(distDir, 'index.html')));
 }
 
-app.listen(port, () => console.log(`folio-atelier server listening on ${port}`));
+app.listen(port, () => console.log(`easy-resume server listening on ${port}`));

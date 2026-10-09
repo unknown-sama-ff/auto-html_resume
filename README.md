@@ -1,4 +1,4 @@
-# folio atelier
+# easy 简历
 
 面向个人求职者的AI岗位简历工具，React + TypeScript + Vite前端与Express后端合并部署于Railway。
 

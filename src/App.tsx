@@ -162,7 +162,7 @@ export default function App(){
     if(stateRef.current.versions.length===1)setView('home');
     dispatch({type:'delete',id});setDeleteTargetId(null);setError('');
   }
-  function backupVersions(){const url=URL.createObjectURL(new Blob([JSON.stringify(state)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='folio-versions-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  function backupVersions(){const url=URL.createObjectURL(new Blob([JSON.stringify(state)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='easy-resume-versions-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   const isHome=view==='home'||!active;
   const sidebar=<Sidebar view={isHome?'home':view} collapsed={sidebarCollapsed} versions={state.versions} activeVersionId={state.activeVersionId} busy={!hydrated||generating||reading||photoBusy} onToggle={()=>setSidebarCollapsed(value=>!value)} onNavigate={next=>{navigate(next);if(window.matchMedia('(max-width:930px)').matches)setSidebarCollapsed(true);}} onSelect={selectVersion} onDelete={setDeleteTargetId} onBackup={backupVersions}/>;
   const deleteDialog=deleteTarget?<DeleteVersionDialog version={deleteTarget} onCancel={()=>setDeleteTargetId(null)} onConfirm={confirmDelete}/>:null;
