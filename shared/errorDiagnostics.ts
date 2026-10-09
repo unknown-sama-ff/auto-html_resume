@@ -3,7 +3,7 @@ import { TIMEOUT_PHASES, MAX_AI_TIMEOUT_MS } from './requestTimeout.ts';
 export const DIAGNOSTICS_VERSION = 1;
 export const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export const KNOWN_UPSTREAM_CODES = ['invalid_request_error','invalid_type','unsupported_parameter','unsupported_value','model_not_found','invalid_model','unsupported_model','context_length_exceeded','content_policy_violation','invalid_image','image_too_large'] as const;
-export const KNOWN_DIAGNOSTICS = ['unknown','protocol_mismatch','streaming_required','model_unavailable','image_unsupported','context_too_long','content_type','invalid_parameter','reasoning_parameter','request_timeout','upstream_timeout','invalid_model_output'] as const;
+export const KNOWN_DIAGNOSTICS = ['unknown','protocol_mismatch','streaming_required','model_unavailable','image_unsupported','context_too_long','content_type','invalid_parameter','reasoning_parameter','request_timeout','upstream_timeout','invalid_model_output','insufficient_tailoring'] as const;
 export function isSafeUpstreamParam(value: unknown): value is string {
   return typeof value === 'string' && /^(model|messages(?:\[\d{1,3}\])?(?:\.content(?:\[\d{1,3}\])?(?:\.image_url)?)?|input|stream|store|max_tokens|max_completion_tokens|image_url|temperature|reasoning|reasoning_effort|reasoning\.effort)$/.test(value);
 }
@@ -24,6 +24,8 @@ export function formatApiFailure(payload: unknown, status: number, fallback: str
   if (typeof data.upstreamCode === 'string' && KNOWN_UPSTREAM_CODES.includes(data.upstreamCode as typeof KNOWN_UPSTREAM_CODES[number])) details.push(`错误码 ${data.upstreamCode}`);
   if (isSafeUpstreamParam(data.upstreamParam)) details.push(`参数 ${data.upstreamParam}`);
   const context = record(data.diagnostics);
+  if (context?.generationStage === 'analysis') details.push('生成阶段 岗位分析');
+  else if (context?.generationStage === 'tailoring') details.push('生成阶段 正文改写');
   if (context?.protocol === 'chat_completions' || context?.protocol === 'responses') details.push(`协议 ${context.protocol}`);
   const model = safeModelLabel(context?.model); if (model) details.push(`模型 ${model}`);
   if (typeof context?.reasoningEffort === 'string' && REASONING_EFFORTS.includes(context.reasoningEffort as typeof REASONING_EFFORTS[number])) details.push(`推理 ${context.reasoningEffort}`);

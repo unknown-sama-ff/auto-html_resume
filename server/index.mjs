@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { buildGenerationMessages, parseGeneration } from './generation.mjs';
+import { runGeneration, GENERATION_VERSION } from '../shared/generationPipeline.ts';
 import { getPresetDefinitions, publicPreset } from './presets.mjs';
 import { buildEditMessages, parseEditPatch } from '../shared/edit.ts';
 import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest, parseReasoningEffort } from '../shared/modelProtocol.ts';
@@ -81,13 +81,13 @@ function resolveProviderConfig(config = {}) {
   return { ...resolveModelEndpoint(preset.baseUrl, preset.protocol), model: preset.model, reasoningEffort: parseReasoningEffort(preset.reasoningEffort), apiKey };
 }
 
-async function requestModel(config, messages, context) {
+async function requestModel(config, messages, context, budget) {
   const provider = resolveProviderConfig(config);
-  const timeoutMs = parseAiTimeoutMs(process.env.AI_REQUEST_TIMEOUT_MS);
-  const started = performance.now();
+  const timeoutMs = budget?.timeoutMs ?? parseAiTimeoutMs(process.env.AI_REQUEST_TIMEOUT_MS);
+  const started = budget?.started ?? performance.now();
   let phase = 'checking_destination';
-  if(context)context.details={...requestDiagnostics(provider,messages),timeoutMs,phase};
-  const signal = AbortSignal.timeout(timeoutMs);
+  if(context)context.details={...context.details,...requestDiagnostics(provider,messages),timeoutMs,phase};
+  const signal = budget?.signal ?? AbortSignal.timeout(timeoutMs);
   try {
     await assertSafeDestination(provider.url);
     signal.throwIfAborted();
@@ -148,10 +148,20 @@ function sendFailure(response,error) {
   if(context)logAiFailure(context,status,error);
   return response.status(status).json({error:message,...extra});
 }
-app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier',version:appVersion,diagnosticsVersion:DIAGNOSTICS_VERSION}));
+app.get('/api/health', (_request,response)=>response.json({ok:true,service:'folio-atelier',version:appVersion,diagnosticsVersion:DIAGNOSTICS_VERSION,generationVersion:GENERATION_VERSION}));
 app.get('/api/ai/presets', (_request,response)=>response.json(getPresetDefinitions().map(publicPreset)));
 app.post('/api/ai/generate', async (request,response)=>{
-  try { assertRateLimit(request); const messages=buildGenerationMessages(request.body); const content=await requestModel(request.body.config,messages,response.locals.aiDiagnostics); return response.json(parseGeneration(content, request.body.profileText, request.body.templateId, { hasProfileImages: Boolean(request.body.profileImages?.length) })); }
+  try {
+    assertRateLimit(request);
+    const timeoutMs=parseAiTimeoutMs(process.env.AI_REQUEST_TIMEOUT_MS);
+    const budget={timeoutMs,started:performance.now(),signal:AbortSignal.timeout(timeoutMs)};
+    const context=response.locals.aiDiagnostics;
+    const result=await runGeneration(request.body, (messages,stage)=>{
+      context.details.generationStage=stage;
+      return requestModel(request.body.config,messages,context,budget);
+    },budget.signal);
+    return response.json(result);
+  }
   catch(error){return sendFailure(response,error);}
 });
 app.post('/api/ai/edit', async (request,response)=>{

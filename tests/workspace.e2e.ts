@@ -5,6 +5,18 @@ const makeResult=(name='张雨',role='数据分析师'):GenerationResult=>{
   const resume=structuredClone(initialResume);resume.name=name;resume.role=role;resume.projects[0].title='电商数据分析';
   return {resume,jobTitle:role,warnings:[],report:{summary:'材料显示有数据分析经验。',requirements:[{requirement:'Python',status:'matched',evidence:'项目使用Python',suggestion:''}]}};
 };
+const tailoredSummary='围绕数据分析岗位，突出数据分析路径设计、经营视图整理与周报制作实践。';
+const makeTargetedPatch=()=>{
+  const result=makeResult();
+  return {
+    summary:tailoredSummary,
+    projects:result.resume.projects.map(({id,description},index)=>({id,description:index===0?['围绕资料采集与岗位解析，设计结构化内容模型与证据可追溯的简历工作流。',...description.slice(1)]:description})),
+    experience:result.resume.experience.map(({bullets},index)=>({index,bullets})),
+    customSections:result.resume.customSections.map(({id,items})=>({id,items})),
+    report:result.report,
+    warnings:[],
+  };
+};
 test.beforeEach(async({page})=>{
   await page.route('**/api/ai/presets',route=>route.fulfill({json:[{id:'cf-api-fan',label:'Relay',provider:'OpenAI-compatible',model:'test-model',baseUrl:'https://cf.api.fan/v1',description:'测试通道'}]}));
 });
@@ -140,7 +152,9 @@ test('custom generation and editing go directly to the user endpoint without sen
   await page.route('https://api.example.com/v1/chat/completions',route=>{
     if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'POST, OPTIONS','access-control-allow-headers':'Authorization, Content-Type'}});
     calls++;const payload=route.request().postDataJSON();requestModel=payload.model;authorization=route.request().headers().authorization;profile=JSON.stringify(payload.messages);
-    const content=calls===1?makeResult():{id:'direct-edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'更新姓名色彩',preview:'姓名改为深蓝色',requiresConfirmation:false};
+    const system=payload.messages.find((message:{role:string})=>message.role==='system').content;
+    const content=system.includes('岗位正文改写阶段')?makeTargetedPatch():calls===1?makeResult():{id:'direct-edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'更新姓名色彩',preview:'姓名改为深蓝色',requiresConfirmation:false};
+    if(system.includes('岗位正文改写阶段')){expect(calls).toBe(2);const input=JSON.parse(payload.messages.find((message:{role:string})=>message.role==='user').content);expect(input.profileText).toBe('姓名：张雨');expect(input.jobText).toBe('岗位：数据分析师');expect(input.draft).toBeTruthy();}
     return route.fulfill({headers:{'access-control-allow-origin':'*'},json:{choices:[{message:{content:JSON.stringify(content)}}]}});
   });
   await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
@@ -148,8 +162,8 @@ test('custom generation and editing go directly to the user endpoint without sen
   await expect(dialog.getByRole('button',{name:'保存模型选择'})).toBeDisabled();
   await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1');await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');await dialog.getByLabel('API Key',{exact:false}).fill('test-custom-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
   await page.locator('.intake-card textarea').nth(0).fill('姓名：张雨');await page.locator('.intake-card textarea').nth(1).fill('岗位：数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
-  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(requestModel).toBe('custom-test-model');expect(authorization).toBe('Bearer test-custom-key');expect(profile).toContain('张雨');expect(serverCalls).toBe(0);
-  await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('把姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('姓名改为深蓝色');await page.getByRole('button',{name:'应用修改'}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');expect(calls).toBe(2);expect(serverCalls).toBe(0);
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');await expect(page.locator('.resume-paper')).toContainText(tailoredSummary);expect(calls).toBe(2);expect(requestModel).toBe('custom-test-model');expect(authorization).toBe('Bearer test-custom-key');expect(profile).toContain('张雨');expect(serverCalls).toBe(0);
+  await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('把姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('姓名改为深蓝色');await page.getByRole('button',{name:'应用修改'}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');expect(calls).toBe(3);expect(serverCalls).toBe(0);
   await expect(page.locator('.save-state')).toHaveText('已本地保存');
   const saved=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{const request=indexedDB.open('folio-atelier',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result;const read=db.transaction('workspace','readonly').objectStore('workspace').get('resume-editor-state');read.onsuccess=()=>{resolve(JSON.stringify(read.result));db.close();};read.onerror=()=>{reject(read.error);db.close();};};}));
   expect(saved).not.toContain('test-custom-key');expect(saved).not.toContain('custom-test-model');
@@ -283,12 +297,13 @@ test('custom Responses generation and edit stay browser-direct and use the prope
   await page.route('https://responses.example/v1/responses',route=>{
     if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'POST, OPTIONS','access-control-allow-headers':'Authorization, Content-Type'}});
     const payload=route.request().postDataJSON();expect(payload.store).toBe(false);expect(payload.stream).toBe(false);expect(payload.input[0].content[0].type).toBe('input_text');expect(payload).not.toHaveProperty('messages');calls++;
-    const content=calls===1?makeResult():{targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'调整色彩',preview:'深蓝色建议',requiresConfirmation:false};
+    const content=payload.instructions.includes('岗位正文改写阶段')?makeTargetedPatch():calls===1?makeResult():{targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'调整色彩',preview:'深蓝色建议',requiresConfirmation:false};
+    if(payload.instructions.includes('岗位正文改写阶段')){expect(calls).toBe(2);const input=JSON.parse(payload.input[0].content[0].text);expect(input.profileText).toBe('测试个人资料张雨');expect(input.jobText).toBe('测试岗位要求');expect(input.draft).toBeTruthy();}
     return route.fulfill({headers:{'access-control-allow-origin':'*'},json:{status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(content)}]}]}});
   });
   await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();const dialog=page.getByRole('dialog',{name:'AI 模型设置'});await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();await dialog.getByLabel('完整 URL',{exact:false}).fill('https://responses.example/v1/responses');await dialog.getByLabel('模型名称',{exact:true}).fill('test-model');await dialog.getByLabel('API Key',{exact:false}).fill('fake-test-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
-  await page.locator('.intake-card textarea').first().fill('测试个人资料张雨');await page.locator('.intake-card textarea').nth(1).fill('测试岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
-  await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('深蓝色建议');expect(calls).toBe(2);expect(backendRequests).toBe(0);
+  await page.locator('.intake-card textarea').first().fill('测试个人资料张雨');await page.locator('.intake-card textarea').nth(1).fill('测试岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');await expect(page.locator('.resume-paper')).toContainText(tailoredSummary);expect(calls).toBe(2);
+  await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('深蓝色建议');expect(calls).toBe(3);expect(backendRequests).toBe(0);
 });
 
 test('custom upstream400 gives a safe known hint and does not retry another interface',async({page})=>{

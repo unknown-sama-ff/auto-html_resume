@@ -177,7 +177,7 @@ test('verified tailoring evidence survives workspace backup roundtrips', () => {
   assert.equal(restored.versions[0].resume.projects[0].description[0], rewrittenFact);
 });
 
-test('tailoring guidance keeps one generation request with two messages and preserves job inputs', () => {
+test('fact-analysis guidance uses two messages and preserves original profile and job inputs', () => {
   const jobText = '数据分析师：负责经营分析、数据清洗和周报；要求 Python 和 SQL。';
   const messages = buildGenerationMessages({ config: { mode: 'preset', presetId: 'test' }, profileText: profile, jobText });
   assert.equal(messages.length, 2);

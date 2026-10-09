@@ -48,18 +48,54 @@ function tailoredResult() {
   };
 }
 
+function sourceDraft() {
+  const result = tailoredResult();
+  result.resume.summary = '材料包括销售数据处理、经营报表和门店日报整理经历。';
+  result.resume.projects[0].description = [sourceQuote];
+  result.report.summary = '个人材料中的销售数据项目对应经营分析岗位。';
+  result.report.requirements[0].resumeEvidence = [{ sourceQuote, sourceType: 'text', resumePath, resumeQuote: sourceQuote }];
+  return result;
+}
+
+function targetedPatch() {
+  const result = tailoredResult();
+  return {
+    summary: result.resume.summary,
+    projects: result.resume.projects.map(({ id, description }) => ({ id, description })),
+    experience: result.resume.experience.map(({ bullets }, index) => ({ index, bullets })),
+    customSections: result.resume.customSections.map(({ id, items }) => ({ id, items })),
+    skillsOrder: [0, 1],
+    report: result.report,
+    warnings: [],
+  };
+}
+
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/ai/presets', route => route.fulfill({ json: [] }));
 });
 
-async function submitMaterials(page: Page) {
+async function submitInputs(page: Page) {
   await page.locator('.intake-card textarea').first().fill(profileText);
   await page.locator('.intake-card textarea').nth(1).fill(jobText);
   await page.locator('.consent-line input').check();
   await page.getByRole('button', { name: '生成我的岗位简历' }).click();
+}
+
+async function submitMaterials(page: Page) {
+  await submitInputs(page);
   await expect(page.locator('.resume-paper h1')).toHaveText('周晨');
   await expect(page.locator('.resume-paper')).toContainText(resumeQuote);
   await expect(page.locator('.resume-paper')).not.toContainText('SQL');
+}
+
+async function configureCustomModel(page: Page, url = 'https://tailoring.example/v1') {
+  await page.getByRole('button', { name: 'AI 模型', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'AI 模型设置' });
+  await dialog.getByRole('button', { name: '自定义URL', exact: true }).click();
+  await dialog.getByLabel('完整 URL', { exact: false }).fill(url);
+  await dialog.getByLabel('模型名称', { exact: true }).fill('tailoring-test-model');
+  await dialog.getByLabel('API Key', { exact: false }).fill('fake-tailoring-test-key');
+  await dialog.getByRole('button', { name: '保存模型选择' }).click();
 }
 
 async function assertVisibleMapping(page: Page) {
@@ -108,7 +144,7 @@ test('preset tailoring maps a requirement to its source and rewritten resume, pe
   expect(html).not.toContain(resumePath);
 });
 
-test('custom direct generation sends the tailoring instructions and removes mappings that do not point to the returned resume', async ({ page }) => {
+test('custom direct generation rewrites source draft in a separate stage and preserves the factual fields', async ({ page }) => {
   let directCalls = 0;
   let backendCalls = 0;
   const invalidQuote = '不存在的正文描述：主导预算预测。';
@@ -124,28 +160,38 @@ test('custom direct generation sends the tailoring instructions and removes mapp
     const request = route.request().postDataJSON();
     expect(request.model).toBe('tailoring-test-model');
     const system = request.messages.find((message: { role: string }) => message.role === 'system').content;
-    expect(system).toMatch(/拆解|拆分|分解/);
     expect(system).toContain('岗位');
     expect(system).toContain('事实');
     expect(system).toContain('summary');
     expect(system).toContain('experience');
     expect(JSON.stringify(request.messages)).toContain(sourceQuote);
-    const result = tailoredResult();
-    result.report.requirements[0].resumeEvidence.push({ sourceQuote, resumePath: 'projects.9.description.0', resumeQuote: invalidQuote, sourceType: 'text' });
+    let result: ReturnType<typeof sourceDraft> | ReturnType<typeof targetedPatch>;
+    if (system.includes('岗位正文改写阶段')) {
+      expect(directCalls).toBe(2);
+      const user = request.messages.find((message: { role: string }) => message.role === 'user').content;
+      const input = JSON.parse(user);
+      expect(input.profileText).toBe(profileText);
+      expect(input.jobText).toBe(jobText);
+      expect(JSON.stringify(input.draft)).toContain(sourceQuote);
+      expect(JSON.stringify(input.draft)).not.toContain(resumeQuote);
+      result = targetedPatch();
+      result.report.requirements[0].resumeEvidence.push({ sourceQuote, resumePath: 'projects.9.description.0', resumeQuote: invalidQuote, sourceType: 'text' });
+    } else {
+      expect(directCalls).toBe(1);
+      expect(system).toMatch(/拆解|拆分|分解/);
+      result = sourceDraft();
+    }
     return route.fulfill({
       headers: { 'access-control-allow-origin': '*' },
       json: { choices: [{ message: { content: `\`\`\`json\n${JSON.stringify(result)}\n\`\`\`` } }] },
     });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI 模型', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'AI 模型设置' });
-  await dialog.getByRole('button', { name: '自定义URL', exact: true }).click();
-  await dialog.getByLabel('完整 URL', { exact: false }).fill('https://tailoring.example/v1');
-  await dialog.getByLabel('模型名称', { exact: true }).fill('tailoring-test-model');
-  await dialog.getByLabel('API Key', { exact: false }).fill('fake-tailoring-test-key');
-  await dialog.getByRole('button', { name: '保存模型选择' }).click();
+  await configureCustomModel(page);
   await submitMaterials(page);
+  await expect(page.locator('.resume-paper')).toContainText(tailoredResult().resume.summary);
+  await expect(page.locator('.resume-paper')).not.toContainText(sourceDraft().resume.summary);
+  await expect(page.locator('.resume-paper')).not.toContainText(sourceQuote);
   await assertVisibleMapping(page);
   await expect(page.locator('.match-page')).not.toContainText(invalidQuote);
   await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
@@ -153,6 +199,53 @@ test('custom direct generation sends the tailoring instructions and removes mapp
   await page.getByRole('button', { name: '下载全部版本备份', exact: true }).click();
   const backup = JSON.parse(await downloadedText(await downloaded));
   expect(backup.versions[0].report.requirements[0].resumeEvidence).toEqual([{ sourceQuote, sourceType: 'text', resumePath, resumeQuote }]);
-  expect(directCalls).toBe(1);
+  const savedResume = backup.versions[0].resume;
+  const original = sourceDraft().resume;
+  expect(savedResume.summary).toBe(tailoredResult().resume.summary);
+  expect(savedResume.projects[0]).toEqual({ ...original.projects[0], description: [resumeQuote] });
+  expect(savedResume.name).toBe(original.name);
+  expect(savedResume.email).toBe(original.email);
+  expect(savedResume.skills).toEqual(original.skills);
+  expect(savedResume.experience).toEqual(original.experience);
+  expect(savedResume.education).toEqual(original.education);
+  expect(savedResume.awards).toEqual(original.awards);
+  expect(savedResume.design).toEqual(original.design);
+  expect(directCalls).toBe(2);
+  expect(backendCalls).toBe(0);
+});
+
+test('failure in the dedicated rewrite stage keeps both inputs and never saves the preliminary draft', async ({ page }) => {
+  let directCalls = 0;
+  let backendCalls = 0;
+  await page.route('**/api/ai/generate', route => {
+    backendCalls++;
+    return route.fulfill({ status: 400, json: { error: '自定义资料应直接发送到模型通道。' } });
+  });
+  await page.route('https://tailoring.example/v1/chat/completions', route => {
+    if (route.request().method() === 'OPTIONS') {
+      return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'Authorization, Content-Type' } });
+    }
+    directCalls++;
+    const request = route.request().postDataJSON();
+    const system = request.messages.find((message: { role: string }) => message.role === 'system').content;
+    if (system.includes('岗位正文改写阶段')) {
+      expect(directCalls).toBe(2);
+      return route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, json: { error: 'rewrite unavailable' } });
+    }
+    expect(directCalls).toBe(1);
+    return route.fulfill({ headers: { 'access-control-allow-origin': '*' }, json: { choices: [{ message: { content: JSON.stringify(sourceDraft()) } }] } });
+  });
+  await page.goto('/');
+  await configureCustomModel(page);
+  await submitInputs(page);
+  await expect(page.getByRole('alert')).toContainText('503');
+  await expect(page.locator('.intake-card textarea').first()).toHaveValue(profileText);
+  await expect(page.locator('.intake-card textarea').nth(1)).toHaveValue(jobText);
+  await expect(page.locator('.resume-paper')).toHaveCount(0);
+  await expect(page.locator('.version-item')).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: '打开版本侧边栏', exact: true }).click();
+  await expect(page.locator('.version-item')).toHaveCount(0);
+  expect(directCalls).toBe(2);
   expect(backendCalls).toBe(0);
 });

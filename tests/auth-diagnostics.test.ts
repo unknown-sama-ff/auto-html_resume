@@ -35,6 +35,8 @@ async function localApp(url:string,key:string,extra:Record<string,string>={}) {
 }
 const generationBody={config:{mode:'preset',presetId:'cf-api-fan'},profileText:'只用于测试的个人材料',jobText:'测试岗位'};
 const fakeKey='fake-author-test-key';
+const tailoredSummary='当前材料未提供具体经历；补充真实个人事实后可针对测试岗位突出相关实践。';
+const tailoringPatch={summary:tailoredSummary,projects:[],experience:[],customSections:[],warnings:[],report:{summary:'测试岗位尚未提供具体职责，个人材料也缺少可对应的经历。',requirements:[{requirement:'测试岗位的具体职责与任职要求',status:'missing',evidence:'',suggestion:'请补充具体岗位要求和真实个人经历。',resumeEvidence:[]}]}};
 
 test('author preset returns distinguishable 401 and 403 without exposing Key, materials or upstream body',async()=>{
   let status=401;let auth='';
@@ -80,17 +82,45 @@ test('placeholder, empty and incorrectly wrapped Keys are rejected before any up
 
 test('text-only generation is compatible with relays requiring string message content',async()=>{
   const generated={jobTitle:'测试岗位',resume:{name:'测试用户',role:'测试岗位'},report:{summary:'测试分析',requirements:[]},warnings:[]};
+  const requests:Record<string,unknown>[]=[];
   const upstream=http.createServer((request,response)=>{
     let body='';request.on('data',chunk=>{body+=chunk;});request.on('end',()=>{
-      const payload=JSON.parse(body);const compatible=typeof payload.messages?.[1]?.content==='string';
+      const payload=JSON.parse(body);requests.push(payload);const compatible=typeof payload.messages?.[1]?.content==='string';
       response.writeHead(compatible?200:400,{'Content-Type':'application/json'});
-      response.end(JSON.stringify(compatible?{choices:[{message:{content:JSON.stringify(generated)}}]}:{error:{code:'invalid_type',param:'messages[1].content',message:'Invalid type: expected a string for messages[1].content.'}}));
+      response.end(JSON.stringify(compatible?{choices:[{message:{content:JSON.stringify(requests.length===1?generated:tailoringPatch)}}]}:{error:{code:'invalid_type',param:'messages[1].content',message:'Invalid type: expected a string for messages[1].content.'}}));
     });
   });
   await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
   const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey);
-  try{const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,200);const result=await response.json();assert.equal(result.resume.name,'测试用户');}
+  try{const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,200);const result=await response.json();assert.equal(result.resume.name,'测试用户');assert.equal(result.resume.summary,tailoredSummary);assert.equal(requests.length,2);assert.match(JSON.stringify(requests[1]),/岗位正文改写阶段/);}
   finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('two-stage preset generation counts as one application rate-limit request',async()=>{
+  let calls=0;const generated={jobTitle:'测试岗位',resume:{name:'测试用户',role:'测试岗位'},report:{summary:'测试分析',requirements:[]},warnings:[]};
+  const upstream=http.createServer((request,response)=>{
+    calls++;request.resume();response.writeHead(200,{'Content-Type':'application/json'});
+    response.end(JSON.stringify({choices:[{message:{content:JSON.stringify(calls===1?generated:tailoringPatch)}}]}));
+  });
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_RATE_LIMIT:'1'});
+  try{
+    const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,200);assert.equal((await response.json()).resume.summary,tailoredSummary);assert.equal(calls,2);
+    const blocked=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(blocked.status,400);assert.match((await blocked.json()).error,/频繁/);assert.equal(calls,2);
+  }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('second-stage preset failure is reported without returning the first-stage draft or retrying',async()=>{
+  let calls=0;const generated={jobTitle:'测试岗位',resume:{name:'测试用户',role:'测试岗位'},report:{summary:'测试分析',requirements:[]},warnings:[]};
+  const upstream=http.createServer((request,response)=>{
+    calls++;request.resume();response.writeHead(calls===1?200:401,{'Content-Type':'application/json'});
+    response.end(JSON.stringify(calls===1?{choices:[{message:{content:JSON.stringify(generated)}}]}:{error:{message:fakeKey}}));
+  });
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey);
+  try{
+    const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,502);const payload=await response.json();assert.equal(payload.upstreamStatus,401);assert.equal(calls,2);assert.ok(!('resume' in payload));assert.ok(!JSON.stringify(payload).includes(fakeKey));
+  }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
 test('upstream400 is classified safely without returning its raw message, Key or resume content',async()=>{
@@ -114,15 +144,15 @@ test('explicit Responses path supports generation and edit without auto-switchin
   const upstream=http.createServer((request,response)=>{
     let raw='';request.on('data',chunk=>raw+=chunk);request.on('end',()=>{
       requests.push({path:request.url??'',body:JSON.parse(raw)});response.writeHead(200,{'Content-Type':'application/json'});
-      response.end(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(requests.length===1?generated:patch)}]}]}));
+      response.end(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(requests.length===1?generated:requests.length===2?tailoringPatch:patch)}]}]}));
     });
   });
   await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
   const app=await localApp(`http://127.0.0.1:${address.port}/v1/responses`,fakeKey);
   try{
-    const generation=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(generation.status,200);assert.equal((await generation.json()).resume.name,'Responses测试用户');
+    const generation=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(generation.status,200);const result=await generation.json();assert.equal(result.resume.name,'Responses测试用户');assert.equal(result.resume.summary,tailoredSummary);
     const edit=await fetch(app.url+'/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:generationBody.config,prompt:'改姓名颜色',selection:{id:'profile-name'}})});assert.equal(edit.status,200);assert.equal((await edit.json()).patch.value,'#315A64');
-    assert.equal(requests.length,2);for(const request of requests){assert.equal(request.path,'/v1/responses');assert.equal(request.body.store,false);assert.equal(request.body.stream,false);assert.ok(Array.isArray(request.body.input));assert.ok(!('messages' in request.body));}
+    assert.equal(requests.length,3);assert.match(String(requests[1].body.instructions),/岗位正文改写阶段/);for(const request of requests){assert.equal(request.path,'/v1/responses');assert.equal(request.body.store,false);assert.equal(request.body.stream,false);assert.ok(Array.isArray(request.body.input));assert.ok(!('messages' in request.body));}
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
@@ -141,7 +171,7 @@ test('unknown upstream400 carries visible safe context and a trace that matches 
     assert.match(payload.requestId,/^[0-9a-f-]{36}$/);assert.equal(response.headers.get('x-app-request-id'),payload.requestId);
     const log=app.logs.join('');assert.match(log,/\[ai-error\]/);assert.ok(log.includes(payload.requestId));assert.ok(log.includes('chat_completions'));assert.ok(log.includes('400'));
     for(const forbidden of [fakeKey,generationBody.profileText,'unrecognized relay detail']){assert.ok(!JSON.stringify(payload).includes(forbidden));assert.ok(!log.includes(forbidden));}
-    const health=await (await fetch(app.url+'/api/health')).json();assert.equal(health.version,'abcdef1');assert.equal(health.diagnosticsVersion,1);assert.equal(calls,1);
+    const health=await (await fetch(app.url+'/api/health')).json();assert.equal(health.version,'abcdef1');assert.equal(health.diagnosticsVersion,1);assert.equal(health.generationVersion,2);assert.equal(calls,1);
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
@@ -168,6 +198,20 @@ test('request timeout also covers slow response-body reading, not just connectio
   const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_REQUEST_TIMEOUT_MS:'1000'});
   try{const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,504);const payload=await response.json();assert.equal(payload.diagnostic,'request_timeout');assert.equal(payload.diagnostics.phase,'reading_response');assert.equal(calls,1);assert.ok(payload.diagnostics.elapsedMs>=900);}
   finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
+});
+
+test('preset generation shares one deadline across analysis and dedicated rewriting',async()=>{
+  let calls=0;const generated={jobTitle:'测试岗位',resume:{name:'测试用户',role:'测试岗位'},report:{summary:'测试分析',requirements:[]},warnings:[]};
+  const upstream=http.createServer((request,response)=>{
+    calls++;request.resume();const content=calls===1?generated:tailoringPatch;
+    const timer=setTimeout(()=>{response.writeHead(200,{'Content-Type':'application/json'});response.end(JSON.stringify({choices:[{message:{content:JSON.stringify(content)}}]}));},650);
+    response.on('close',()=>clearTimeout(timer));
+  });
+  await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_REQUEST_TIMEOUT_MS:'1000'});
+  try{
+    const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,504);const payload=await response.json();assert.equal(payload.diagnostic,'request_timeout');assert.equal(payload.diagnostics.timeoutMs,1000);assert.equal(calls,2);assert.ok(!('resume' in payload));
+  }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
 test('upstream gateway504 is not confused with the tools own deadline',async()=>{

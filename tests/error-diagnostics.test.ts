@@ -20,6 +20,24 @@ test('invalid model output is shown as a safe, actionable diagnostic category',(
   assert.ok(!detail.includes('resume') && !detail.includes('apiKey'));
 });
 
+test('incomplete tailoring shows its trusted category and the failed generation stage',()=>{
+  const detail=formatApiFailure({error:'模型尚未完成岗位正文改写，原资料已保留。',diagnostic:'insufficient_tailoring',diagnostics:{generationStage:'tailoring',phase:'parsing_response'}},502,'fallback');
+  assert.match(detail,/类别 insufficient_tailoring/);
+  assert.match(detail,/生成阶段 正文改写/);
+  assert.match(detail,/阶段 解析结果/);
+  assert.ok(!detail.includes('generationStage') && !detail.includes('parsing_response'));
+});
+
+test('analysis is translated while arbitrary generation stage metadata is hidden',()=>{
+  const analysis=formatApiFailure({error:'无法分析材料',diagnostics:{generationStage:'analysis'}},502,'fallback');
+  assert.match(analysis,/生成阶段 岗位分析/);
+  for(const value of ['private-profile-text','Analysis','tailoring: private-profile-text',{value:'analysis'},['tailoring']]){
+    const detail=formatApiFailure({error:'生成失败',diagnostics:{generationStage:value}},502,'fallback');
+    assert.ok(!detail.includes('生成阶段'));
+    assert.ok(!detail.includes('private-profile-text'));
+  }
+});
+
 test('reasoning rejection is not mislabeled as model unavailable',()=>{
   const parsed=describeBadRequest({error:{code:'unsupported_parameter',param:'reasoning_effort',message:'The model does not support reasoning_effort'}});
   assert.equal(parsed.diagnostic,'reasoning_parameter');assert.equal(parsed.upstreamParam,'reasoning_effort');assert.match(parsed.hint,/不等于模型不存在/);

@@ -276,7 +276,7 @@ export function getResumeEvidenceText(resume: ResumeEvidenceContent, path: strin
   return typeof value === 'string' ? value : undefined;
 }
 
-export type GenerationSourceContext = { hasProfileImages?: boolean };
+export type GenerationSourceContext = { hasProfileImages?: boolean; skipSourceRepair?: boolean };
 
 function normalizeResumeEvidence(value: unknown, resume: ReturnType<typeof normalizeResume>, profileText: string, context: GenerationSourceContext, indexMaps: ContentIndexMaps) {
   const result: z.infer<typeof resumeEvidenceSchema>[] = [];
@@ -379,7 +379,7 @@ export function normalizeGenerationPayload(value: unknown, profileText = '', con
     if (status !== item.status && item.status === 'matched' && warnings.length < 20) warnings.push('部分岗位要求缺少可核对的资料依据或正文对应描述，已调整匹配状态，请核对原文。');
     return { requirement: textValue(item.requirement, 500), status, evidence: status === 'missing' ? '' : evidence, suggestion: textValue(item.suggestion, 2000), resumeEvidence: status === 'missing' ? [] : resumeEvidence };
   }).filter(item => item.requirement);
-  repairResumeFromProfileText(resume, profileText, requirements.flatMap(item => item.resumeEvidence));
+  if (!context.skipSourceRepair) repairResumeFromProfileText(resume, profileText, requirements.flatMap(item => item.resumeEvidence));
   if (!requirements.length && warnings.length < 20) warnings.push('模型未提供可核对的岗位要求分析，请核对简历是否回应目标职责。');
   return {
     jobTitle: textValue(root.jobTitle, 200, textValue(source.role, 200, '目标岗位')) || '目标岗位',
