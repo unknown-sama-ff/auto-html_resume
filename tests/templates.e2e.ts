@@ -38,7 +38,14 @@ test('page design suggestions preview before confirmation and send only selected
 });
 
 test('source review restores omitted facts into editable sections and deletion is undoable',async({page})=>{
-  await createResume(page);await page.locator('.source-review > summary').click();await page.getByLabel('遗漏的志愿活动事实',{exact:true}).check();await page.getByLabel('补充栏目名称').fill('志愿服务');await page.getByRole('button',{name:'将 1 条原文加入简历'}).click();await expect(page.locator('.resume-paper')).toContainText('遗漏的志愿活动事实');
+  await createResume(page);await page.locator('.source-review > summary').click();
+  const review=page.locator('.source-review');
+  await expect(review.locator('textarea')).toHaveCount(0);
+  await expect(review.getByRole('button',{name:'添加栏目',exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('补充栏目名称')).toHaveCount(0);
+  await page.getByLabel('遗漏的志愿活动事实',{exact:true}).check();await page.getByLabel('补充栏目名称').fill('志愿服务');await page.getByRole('button',{name:'将 1 条原文加入简历'}).click();await expect(page.locator('.resume-paper')).toContainText('遗漏的志愿活动事实');
+  await expect(review.locator('.custom-section-list')).toHaveCount(0);
+  await expect(page.getByLabel('补充栏目名称')).toHaveCount(0);
   await page.locator('.custom-content').click();await page.getByRole('textbox',{name:'选中区块的内容'}).fill('社区志愿服务原文补回');await page.getByRole('button',{name:'保存内容',exact:true}).click();await expect(page.locator('.resume-paper')).toContainText('社区志愿服务原文补回');
   await page.getByRole('button',{name:'删除栏目 志愿服务'}).click();await expect(page.locator('.custom-content')).toHaveCount(0);await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.resume-paper')).toContainText('社区志愿服务原文补回');
 });

@@ -688,14 +688,12 @@ textarea { resize: vertical; }
 .source-review-body { padding-top: 12px; max-width: 900px; }
 .source-review-body > p { color: #7d8976; line-height: 1.8; }
 .source-review-body .input-label { margin-block: 12px; }
-.source-review-body input:not([type=checkbox]), .source-review-body textarea { border: 1px solid #d8dfd0; border-radius: 4px; padding: 8px; background: white; color: #34493b; font: inherit; }
+.source-review-body input:not([type=checkbox]) { border: 1px solid #d8dfd0; border-radius: 4px; padding: 8px; background: white; color: #34493b; font: inherit; }
 .source-review-body input:not([type=checkbox]) { width: min(100%,400px); }
 .source-original pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 250px; overflow: auto; background: #f0f3ea; padding: 14px; line-height: 1.8; }
 .source-line-list { display: grid; gap: 8px; max-height: 240px; overflow: auto; margin-block: 10px; padding: 10px; border: 1px solid #e0e5d8; border-radius: 4px; }
 .source-line-list label { display: flex; gap: 8px; align-items: flex-start; line-height: 1.8; overflow-wrap: anywhere; }
 .source-line-list input { flex-shrink: 0; margin-top: 4px; }
-.custom-section-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-.custom-section-list > div { display: flex; gap: 10px; align-items: center; border: 1px solid #dce2d3; padding: 6px 8px; border-radius: 4px; }
 @media(max-width:1100px) { .template-picker { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media(max-width:610px) { .template-picker { grid-template-columns: repeat(2,minmax(0,1fr)); } .workspace-design { margin-inline: 16px; padding: 14px; } .template-auto { flex-direction: column; align-items: flex-start; gap: 5px; } .design-controls { gap: 10px; } .design-control-fields { gap: 8px; } }
 .home-shell .landing-shell {min-width:0;}
