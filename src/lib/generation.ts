@@ -8,7 +8,7 @@ import { templateDesign, type TemplateId } from '../../shared/design';
 export async function requestGeneration(config: ModelConfig, profileText: string, jobText: string, profileImages: MaterialImage[], jobImages: MaterialImage[], signal?: AbortSignal, templateId: TemplateId | 'auto' = 'auto'): Promise<GenerationResult> {
   if(config.mode==='custom'){
     const messages=buildGenerationMessages({config,profileText,jobText,profileImages,jobImages,templateId});
-    return parseGeneration(await requestDirectModel(config,messages,signal), profileText, templateId);
+    return parseGeneration(await requestDirectModel(config,messages,signal), profileText, templateId, { hasProfileImages: profileImages.length > 0 });
   }
   const response = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal, body: JSON.stringify({ config: { mode:'preset',presetId:config.presetId }, profileText, jobText, profileImages, jobImages, templateId }) });
   const payload: unknown = await response.json().catch(() => null);

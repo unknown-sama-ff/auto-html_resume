@@ -33,9 +33,16 @@ export const resumeSchema = z.object({
   customSections: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/).max(80), title: z.string().min(1).max(200), items: lines })).max(30).default([]),
   nodeStyles: z.record(z.string().regex(/^[a-zA-Z0-9-]+$/).max(100), nodeStyleSchema).default({}),
 });
+const resumeEvidencePath = /^(?:summary|skills\.\d+\.label|projects\.\d+\.description\.\d+|experience\.\d+\.bullets\.\d+|education\.\d+\.(?:school|degree|period)|awards\.\d+|customSections\.\d+\.items\.\d+)$/;
+export const resumeEvidenceSchema = z.object({
+  sourceQuote: z.string().min(1).max(2000),
+  sourceType: z.enum(['text', 'image']).optional(),
+  resumePath: z.string().max(100).regex(resumeEvidencePath),
+  resumeQuote: z.string().min(1).max(3000),
+});
 export const reportSchema = z.object({
   summary: z.string().max(4000),
-  requirements: z.array(z.object({ requirement: z.string().max(500), status: z.enum(['matched', 'partial', 'missing']), evidence: z.string().max(2000), suggestion: z.string().max(2000).default('') })).max(20),
+  requirements: z.array(z.object({ requirement: z.string().max(500), status: z.enum(['matched', 'partial', 'missing']), evidence: z.string().max(2000), suggestion: z.string().max(2000).default(''), resumeEvidence: z.array(resumeEvidenceSchema).max(6).optional() })).max(20),
 });
 export const generationSchema = z.object({ resume: resumeSchema, jobTitle: z.string().min(1).max(200), report: reportSchema, warnings: z.array(z.string().max(1000)).max(20).default([]) });
 export const materialSchema = z.object({ name: z.string().max(200), mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']), dataUrl: z.string().max(2800000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/) });
@@ -91,12 +98,17 @@ function firstValue(source: JsonObject, keys: string[]) {
 function textField(source: JsonObject, keys: string[], max: number, fallback = '') {
   return textValue(firstValue(source, keys), max, fallback);
 }
-function linesValue(value: unknown, maxItems = 30) {
-  return asArray(value).map(item => {
+function linesValue(value: unknown, maxItems = 30, indices?: Map<number, number>) {
+  const values = asArray(value).map(item => {
     if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') return textValue(item, 3000);
     const source = asObject(item);
     return textField(source, ['text', 'content', 'value', 'name', 'title', 'label', 'description', 'detail', 'item', '名称', '标题', '内容', '描述'], 3000);
-  }).filter(Boolean).slice(0, maxItems);
+  });
+  if (indices) {
+    let next = 0;
+    values.forEach((item, index) => { if (item && next < maxItems) indices.set(index, next++); });
+  }
+  return values.filter(Boolean).slice(0, maxItems);
 }
 function colorValue(value: unknown) { return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined; }
 function numberValue(value: unknown, min: number, max: number) { return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : undefined; }
@@ -136,7 +148,7 @@ function splitRecordText(value: string) {
   return value.split(/\r?\n+/).map(item => item.trim()).filter(Boolean);
 }
 
-function normalizeProject(raw: unknown, index: number, seen: Set<string>) {
+function normalizeProject(raw: unknown, index: number, seen: Set<string>, indexMaps: ContentIndexMaps) {
   const source = asObject(raw);
   const parts = typeof raw === 'string' ? splitRecordText(raw) : [];
   let id = textField(source, ['id', 'key', '编号'], 80).replace(/[^a-zA-Z0-9-]/g, '-');
@@ -146,13 +158,15 @@ function normalizeProject(raw: unknown, index: number, seen: Set<string>) {
   seen.add(id);
   const title = textField(source, ['title', 'name', 'project', 'projectName', '项目', '项目名称'], 3000, parts[0] ?? '');
   const meta = textField(source, ['meta', 'role', 'type', 'category', '项目类型', '角色'], 3000, parts[1] ?? '');
-  const description = linesValue(firstValue(source, ['description', 'descriptions', 'bullets', 'details', 'content', '项目描述', '项目内容']) ?? parts.slice(2));
+  const descriptionIndices = new Map<number, number>();
+  indexMaps.set(`projects.${index}.description`, descriptionIndices);
+  const description = linesValue(firstValue(source, ['description', 'descriptions', 'bullets', 'details', 'content', '项目描述', '项目内容']) ?? parts.slice(2), 30, descriptionIndices);
   const stack = linesValue(firstValue(source, ['stack', 'skills', 'tools', 'technologies', '技术栈', '工具']) ?? []).slice(0, 15).map(value => value.slice(0, 100));
   if (!title && !meta && !description.length && !stack.length) return null;
   return { id, title: title || '未命名项目', meta, description, stack };
 }
 
-function normalizeExperience(raw: unknown) {
+function normalizeExperience(raw: unknown, index: number, indexMaps: ContentIndexMaps) {
   const source = asObject(raw);
   const parts = typeof raw === 'string' ? splitRecordText(raw) : [];
   const header = parts[0] ?? '';
@@ -160,7 +174,9 @@ function normalizeExperience(raw: unknown) {
   const company = textField(source, ['company', 'organization', 'organisation', 'org', 'employer', 'unit', '单位', '组织', '机构', '公司'], 3000, headerParts[0] ?? header);
   const role = textField(source, ['role', 'position', 'jobTitle', 'title', 'department', '职务', '岗位', '职位', '部门'], 3000, headerParts[1] ?? '');
   const period = textField(source, ['period', 'time', 'date', 'duration', 'dates', '在职时间', '任职时间', '时间', '日期'], 100, parts.find(item => /(?:19|20)\d{2}/.test(item)) ?? '');
-  const bullets = linesValue(firstValue(source, ['bullets', 'description', 'details', 'responsibilities', 'content', '工作内容', '职责', '经历']) ?? parts.slice(1).filter(item => item !== period));
+  const bulletIndices = new Map<number, number>();
+  indexMaps.set(`experience.${index}.bullets`, bulletIndices);
+  const bullets = linesValue(firstValue(source, ['bullets', 'description', 'details', 'responsibilities', 'content', '工作内容', '职责', '经历']) ?? parts.slice(1).filter(item => item !== period), 30, bulletIndices);
   if (!company && !role && !period && !bullets.length) return null;
   return { company, role, period, bullets };
 }
@@ -175,24 +191,39 @@ function normalizeEducation(raw: unknown) {
   return { school, degree, period };
 }
 
-function normalizeResume(value: unknown) {
+type ContentIndexMaps = Map<string, Map<number, number>>;
+function compactRecords<T>(items: (T | null)[], section: string, indexMaps: ContentIndexMaps): T[] {
+  const indices = new Map<number, number>();
+  const result: T[] = [];
+  items.forEach((item, index) => {
+    if (item !== null) { indices.set(index, result.length); result.push(item); }
+  });
+  indexMaps.set(section, indices);
+  return result;
+}
+
+function normalizeResume(value: unknown, indexMaps: ContentIndexMaps = new Map()) {
   const source = asObject(value); const rawProjects = asArray(firstValue(source, ['projects', 'projectExperience', '项目经历', '项目经验'])); const seen = new Set<string>();
-  const projects = rawProjects.slice(0, 12).map((raw, index) => normalizeProject(raw, index, seen)).filter((item): item is NonNullable<typeof item> => Boolean(item));
-  const skills = asArray(source.skills).slice(0, 30).map(raw => {
-    const item = asObject(raw); return typeof raw === 'string' ? { label: textValue(raw, 200), level: '' } : { label: textField(item, ['label', 'name', 'skill', '技能', '技能名称'], 200), level: textField(item, ['level', 'proficiency', '熟练度', '掌握程度'], 40) };
-  }).filter(item => item.label);
-  const experience = asArray(firstValue(source, ['experience', 'workExperience', 'internships', 'employment', '工作经历', '实习经历'])).slice(0, 12).map(normalizeExperience).filter((item): item is NonNullable<typeof item> => Boolean(item));
-  const education = asArray(firstValue(source, ['education', 'educationExperience', 'academicBackground', '教育背景', '教育经历'])).slice(0, 8).map(normalizeEducation).filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const projects = compactRecords(rawProjects.slice(0, 12).map((raw, index) => normalizeProject(raw, index, seen, indexMaps)), 'projects', indexMaps);
+  const skills = compactRecords(asArray(source.skills).slice(0, 30).map(raw => {
+    const item = asObject(raw); const skill = typeof raw === 'string' ? { label: textValue(raw, 200), level: '' } : { label: textField(item, ['label', 'name', 'skill', '技能', '技能名称'], 200), level: textField(item, ['level', 'proficiency', '熟练度', '掌握程度'], 40) };
+    return skill.label ? skill : null;
+  }), 'skills', indexMaps);
+  const experience = compactRecords(asArray(firstValue(source, ['experience', 'workExperience', 'internships', 'employment', '工作经历', '实习经历'])).slice(0, 12).map((raw, index) => normalizeExperience(raw, index, indexMaps)), 'experience', indexMaps);
+  const education = compactRecords(asArray(firstValue(source, ['education', 'educationExperience', 'academicBackground', '教育背景', '教育经历'])).slice(0, 8).map(normalizeEducation), 'education', indexMaps);
   const customSeen = new Set<string>();
-  const customSections = asArray(firstValue(source, ['customSections', 'extraSections', '自定义栏目', '其他栏目'])).map((raw, index) => {
+  const customSections = compactRecords(asArray(firstValue(source, ['customSections', 'extraSections', '自定义栏目', '其他栏目'])).map((raw, index) => {
     const item = asObject(raw);
     let id = textField(item, ['id'], 80).replace(/[^a-zA-Z0-9-]/g, '-');
     if (!id || customSeen.has(id)) id = `extra-${index + 1}`;
     let suffix = 1;
     while (customSeen.has(id)) id = `extra-${index + 1}-${suffix++}`;
     customSeen.add(id);
-    return { id, title: textField(item, ['title', 'name', 'heading', '标题', '名称'], 200, '补充信息'), items: linesValue(firstValue(item, ['items', 'bullets', 'content', 'text', '内容'])) };
-  }).filter(item => item.items.length);
+    const itemIndices = new Map<number, number>();
+    indexMaps.set(`customSections.${index}.items`, itemIndices);
+    const section = { id, title: textField(item, ['title', 'name', 'heading', '标题', '名称'], 200, '补充信息'), items: linesValue(firstValue(item, ['items', 'bullets', 'content', 'text', '内容']), 30, itemIndices) };
+    return section.items.length ? section : null;
+  }), 'customSections', indexMaps);
   for (const [key, title] of Object.entries({ courses: '学校课程', languages: '语言能力', publications: '出版与发表', research: '研究经历', volunteering: '志愿服务', interests: '兴趣与特长', additionalInfo: '补充信息' })) {
     const items = linesValue(source[key]);
     if (items.length && !customSections.some(item => item.title === title)) customSections.push({ id: `extra-${key}`, title, items });
@@ -203,9 +234,12 @@ function normalizeResume(value: unknown) {
     const items=asArray(typeof value==='object'&&!Array.isArray(value)?[value]:value).map(item=>typeof item==='object'?JSON.stringify(item):String(item)).filter(item=>item&&item!=='{}').map(item=>item.slice(0,3000)).slice(0,30);
     if(items.length)customSections.push({id:`extra-field-${customSections.length+1}`,title:key.slice(0,200),items});
   }
+  const awardIndices = new Map<number, number>();
+  indexMaps.set('awards', awardIndices);
+  const awards = linesValue(firstValue(source, ['awards', 'certificates', 'honors', 'achievements', '获奖', '获奖情况', '证书']), 30, awardIndices);
   return {
     name: textField(source, ['name', 'fullName', '姓名'], 120, '待补充') || '待补充', role: textField(source, ['role', 'targetRole', 'desiredPosition', '求职意向', '目标岗位'], 200), location: textField(source, ['location', 'city', '所在地', '城市'], 200), email: textField(source, ['email', '邮箱'], 200), phone: textField(source, ['phone', 'mobile', 'telephone', '电话', '手机'], 100), website: textField(source, ['website', 'github', 'portfolio', '网址', '作品链接'], 500),
-    summary: textField(source, ['summary', 'profile', 'overview', '个人简介', '个人概述'], 6000), skills, projects, experience, education, awards: linesValue(firstValue(source, ['awards', 'certificates', 'honors', 'achievements', '获奖', '获奖情况', '证书'])), customSections: customSections.slice(0, 30), design: normalizeDesign(source.design), nodeStyles: normalizeNodeStyles(source.nodeStyles),
+    summary: textField(source, ['summary', 'profile', 'overview', '个人简介', '个人概述'], 6000), skills, projects, experience, education, awards, customSections: customSections.slice(0, 30), design: normalizeDesign(source.design), nodeStyles: normalizeNodeStyles(source.nodeStyles),
   };
 }
 
@@ -218,7 +252,72 @@ function sectionFromProfileText(text: string, labels: string[]) {
   return match?.[1]?.trim() ?? '';
 }
 
-function repairResumeFromProfileText(resume: ReturnType<typeof normalizeResume>, profileText: string) {
+function quotedText(text: string) { return text.replace(/\s+/gu, ''); }
+export function containsQuotedText(text: string, quote: string): boolean {
+  const needle = quote.trim();
+  if (!needle) return false;
+  // Short technical identifiers must be complete tokens (Go is not Google).
+  if (/^[A-Za-z][A-Za-z0-9_+#.-]*$/.test(needle)) {
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?<![A-Za-z0-9_+#])${escaped}(?![A-Za-z0-9_+#])`).test(text);
+  }
+  return quotedText(text).includes(quotedText(needle));
+}
+
+// Only fixed content fields are addressable; model paths are never evaluated.
+type ResumeEvidenceContent = Pick<z.infer<typeof resumeSchema>, 'summary' | 'skills' | 'projects' | 'experience' | 'education' | 'awards' | 'customSections'>;
+export function getResumeEvidenceText(resume: ResumeEvidenceContent, path: string): string | undefined {
+  if (!resumeEvidencePath.test(path)) return undefined;
+  let value: unknown = resume;
+  for (const part of path.split('.')) {
+    if (!value || typeof value !== 'object') return undefined;
+    value = (value as Record<string, unknown>)[part];
+  }
+  return typeof value === 'string' ? value : undefined;
+}
+
+export type GenerationSourceContext = { hasProfileImages?: boolean };
+
+function normalizeResumeEvidence(value: unknown, resume: ReturnType<typeof normalizeResume>, profileText: string, context: GenerationSourceContext, indexMaps: ContentIndexMaps) {
+  const result: z.infer<typeof resumeEvidenceSchema>[] = [];
+  const seen = new Set<string>();
+  for (const raw of asArray(value).slice(0, 6)) {
+    const source = asObject(raw);
+    if (source.sourceType !== undefined && source.sourceType !== 'text' && source.sourceType !== 'image') continue;
+    let path = textValue(source.resumePath, 100);
+    if (!resumeEvidencePath.test(path)) continue;
+    const parts = path.split('.');
+    const nestedIndices = parts.length === 4 ? indexMaps.get(parts.slice(0, 3).join('.')) : undefined;
+    if (nestedIndices) {
+      const index = nestedIndices.get(Number(parts[3]));
+      if (index === undefined) continue;
+      parts[3] = String(index); path = parts.join('.');
+    }
+    const indices = indexMaps.get(parts[0]);
+    if (indices) {
+      const index = indices.get(Number(parts[1]));
+      if (index === undefined) continue;
+      parts[1] = String(index); path = parts.join('.');
+    }
+    const item = resumeEvidenceSchema.safeParse({
+      sourceQuote: textValue(source.sourceQuote, 2000),
+      sourceType: source.sourceType ?? 'text',
+      resumePath: path,
+      resumeQuote: textValue(source.resumeQuote, 3000),
+    });
+    if (!item.success) continue;
+    const { sourceQuote, sourceType, resumePath, resumeQuote } = item.data;
+    const sourceKey = quotedText(sourceQuote), outputKey = quotedText(resumeQuote);
+    const actual = getResumeEvidenceText(resume, resumePath);
+    if (!sourceKey || !outputKey || !actual || !containsQuotedText(actual, resumeQuote)) continue;
+    if (sourceType === 'image' ? !context.hasProfileImages : !containsQuotedText(profileText, sourceQuote)) continue;
+    const key = `${resumePath}:${sourceKey}:${outputKey}`;
+    if (!seen.has(key)) { seen.add(key); result.push(item.data); }
+  }
+  return result;
+}
+
+function repairResumeFromProfileText(resume: ReturnType<typeof normalizeResume>, profileText: string, mappings: z.infer<typeof resumeEvidenceSchema>[] = []) {
   const educationText = sectionFromProfileText(profileText, ['教育背景', '教育经历']);
   if (!resume.education.length && educationText) {
     const lines = splitRecordText(educationText);
@@ -244,29 +343,49 @@ function repairResumeFromProfileText(resume: ReturnType<typeof normalizeResume>,
   const standardHeadings = /^(个人概述|个人简介|教育背景|教育经历|专业技能|核心技能|项目经历|工作\s*[/／]?\s*实习经历|工作经历|实习经历|获奖与证书|获奖\s*[/／]\s*证书)$/;
   for (const match of profileText.matchAll(/(?:^|\n)\[([^\]\n]{1,200})\]\s*\n([\s\S]*?)(?=\n\[[^\]\n]+\]\s*(?:\n|$)|$)/g)) {
     const title = match[1].trim();
-    if (standardHeadings.test(title) || resume.customSections.some(item => item.title === title)) continue;
+    if (standardHeadings.test(title)) continue;
     const items = linesValue(match[2]);
-    const comparable=(text:string)=>text.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
-    const existing=comparable([resume.summary,...resume.projects.flatMap(item=>[item.title,item.meta,...item.description,...item.stack]),...resume.experience.flatMap(item=>[item.company,item.role,item.period,...item.bullets]),...resume.education.flatMap(item=>[item.school,item.degree,item.period]),...resume.skills.map(item=>item.label),...resume.awards,...resume.customSections.flatMap(item=>item.items)].join('\n'));
-    if(items.length && items.every(item=>existing.includes(comparable(item))))continue;
-    if (items.length && resume.customSections.length < 30) {
+    const existing=[resume.summary,...resume.projects.flatMap(item=>[item.title,item.meta,...item.description,...item.stack]),...resume.experience.flatMap(item=>[item.company,item.role,item.period,...item.bullets]),...resume.education.flatMap(item=>[item.school,item.degree,item.period]),...resume.skills.map(item=>item.label),...resume.awards,...resume.customSections.flatMap(item=>item.items)];
+    // An overview or skill label cannot stand in for a detailed original record.
+    const coveredSources = mappings.filter(item => item.sourceType !== 'image' && item.resumePath !== 'summary' && !item.resumePath.startsWith('skills.')).map(item => item.sourceQuote);
+    const missingItems = items.filter(item => {
+      return !existing.some(text => containsQuotedText(text, item)) && !coveredSources.some(source => containsQuotedText(source, item));
+    });
+    if (!missingItems.length) continue;
+    const section = resume.customSections.find(item => item.title === title);
+    if (section && section.items.length + missingItems.length <= 30) section.items.push(...missingItems);
+    else if (resume.customSections.length < 30) {
       let id=`imported-${resume.customSections.length+1}`,suffix=1;
       while(resume.customSections.some(item=>item.id===id))id=`imported-${resume.customSections.length+1}-${suffix++}`;
-      resume.customSections.push({ id, title, items });
+      resume.customSections.push({ id, title, items: missingItems });
     }
   }
   return resume;
 }
 
-export function normalizeGenerationPayload(value: unknown, profileText = '') {
+export function normalizeGenerationPayload(value: unknown, profileText = '', context: GenerationSourceContext = {}) {
   const root = asObject(value); const source = asObject(root.resume);
-  const reportSource = asObject(root.report); const requirements = asArray(reportSource.requirements).slice(0, 20).map(raw => { const item = asObject(raw); const status = item.status === 'matched' || item.status === 'partial' || item.status === 'missing' ? item.status : 'partial'; return { requirement: textValue(item.requirement, 500), status, evidence: textValue(item.evidence, 2000), suggestion: textValue(item.suggestion, 2000) }; }).filter(item => item.requirement);
-  const resume = repairResumeFromProfileText(normalizeResume(Object.keys(source).length ? source : root), profileText);
+  const indexMaps: ContentIndexMaps = new Map();
+  const resume = normalizeResume(Object.keys(source).length ? source : root, indexMaps);
+  const warnings = linesValue(root.warnings, 20).map(value => value.slice(0, 1000));
+  const reportSource = asObject(root.report);
+  const requirements = asArray(reportSource.requirements).slice(0, 20).map(raw => {
+    const item = asObject(raw);
+    let status: 'matched' | 'partial' | 'missing' = item.status === 'matched' || item.status === 'partial' || item.status === 'missing' ? item.status : 'partial';
+    const evidence = textValue(item.evidence, 2000);
+    const resumeEvidence = status === 'missing' ? [] : normalizeResumeEvidence(item.resumeEvidence, resume, profileText, context, indexMaps);
+    if (!evidence) status = 'missing';
+    else if (status === 'matched' && !resumeEvidence.length) status = 'partial';
+    if (status !== item.status && item.status === 'matched' && warnings.length < 20) warnings.push('部分岗位要求缺少可核对的资料依据或正文对应描述，已调整匹配状态，请核对原文。');
+    return { requirement: textValue(item.requirement, 500), status, evidence: status === 'missing' ? '' : evidence, suggestion: textValue(item.suggestion, 2000), resumeEvidence: status === 'missing' ? [] : resumeEvidence };
+  }).filter(item => item.requirement);
+  repairResumeFromProfileText(resume, profileText, requirements.flatMap(item => item.resumeEvidence));
+  if (!requirements.length && warnings.length < 20) warnings.push('模型未提供可核对的岗位要求分析，请核对简历是否回应目标职责。');
   return {
     jobTitle: textValue(root.jobTitle, 200, textValue(source.role, 200, '目标岗位')) || '目标岗位',
     resume,
     report: { summary: textValue(reportSource.summary, 4000), requirements },
-    warnings: linesValue(root.warnings, 20).map(value => value.slice(0, 1000)),
+    warnings: [...new Set(warnings)],
   };
 }
 export const editPatchSchema = z.object({
