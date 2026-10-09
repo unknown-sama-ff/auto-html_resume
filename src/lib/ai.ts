@@ -2,17 +2,21 @@ import { formatApiFailure } from '../../shared/errorDiagnostics';
 import { editPatchSchema } from '../../shared/contracts';
 import { buildEditMessages, parseEditPatch } from '../../shared/edit';
 import { requestDirectModel } from './directModel';
-import { isDesignPatch, type TemplateId } from '../../shared/design';
-import { applyTemplate, getBaseNodeStyle } from './design';
+import { isDesignPatch, FONT_IDS, type TemplateId } from '../../shared/design';
+import { applyTemplate, getBaseNodeStyle, inheritedNodeStyle } from './design';
+import { contentField } from './contentFields';
 import type { ResumeData, SelectionMeta, EditPatch, ModelConfig } from '../types';
 export const cloneResume = (resume: ResumeData): ResumeData => structuredClone(resume);
 export const getNodeStyle = (resume: ResumeData, id: string): Required<ResumeData['nodeStyles'][string]> => {
-  const style={...getBaseNodeStyle(resume,id),...resume.nodeStyles[id]};
+  const parent = inheritedNodeStyle(resume,id);
+  const inherited = Object.fromEntries(Object.entries(parent).filter(([,value])=>value!==undefined));
+  const style={...getBaseNodeStyle(resume,id),...inherited,...resume.nodeStyles[id]};
   if(id==='page')return style;
   const page=resume.nodeStyles.page;
-  return {...style,color:page?.color??style.color,fontSize:style.fontSize*((page?.fontSize??14)/14),fontWeight:resume.nodeStyles[id]?.fontWeight??page?.fontWeight??style.fontWeight};
+  return {...style,fontFamily:resume.nodeStyles[id]?.fontFamily??parent.fontFamily??page?.fontFamily??style.fontFamily,color:page?.color??style.color,fontSize:style.fontSize*((page?.fontSize??14)/14),fontWeight:resume.nodeStyles[id]?.fontWeight??parent.fontWeight??page?.fontWeight??style.fontWeight};
 };
 export function getNodeContent(resume: ResumeData, id: string): string {
+  const field = contentField(resume, id); if (field) return field.content;
   if (id === 'profile-name') return resume.name;
   if (id === 'profile-role') return resume.role;
   if (id === 'profile-contact') return [resume.location, resume.email, resume.phone, resume.website].join('\n');
@@ -31,6 +35,7 @@ export function getNodeContent(resume: ResumeData, id: string): string {
 }
 export function updateContent(resume: ResumeData, id: string, value: string): ResumeData {
   const next = cloneResume(resume); const lines = value.split('\n');
+  const field = contentField(next, id); if (field) { field.set(value); return next; }
   if (id === 'profile-name') next.name = value;
   if (id === 'profile-role') next.role = value;
   if (id === 'profile-contact') [next.location, next.email, next.phone, next.website] = Array.from({length:4}, (_,i) => lines[i] ?? '');
@@ -48,13 +53,16 @@ export function updateContent(resume: ResumeData, id: string, value: string): Re
   return next;
 }
 export function getNodeMeta(resume: ResumeData, id: string): SelectionMeta {
+  const field = contentField(resume, id);
+  if (field) { const style = getNodeStyle(resume, id); return { id, label: field.label, breadcrumb: field.label, kind: 'text', path: id, content: field.content, style, code: JSON.stringify(style, null, 2) }; }
   const simple: Record<string,{label:string;kind:SelectionMeta['kind']}> = {
     page:{label:'整张简历',kind:'page'}, 'profile-name':{label:'姓名',kind:'name'}, 'profile-role':{label:'职业定位',kind:'role'}, 'profile-contact':{label:'联系方式（地点/邮箱/电话/网址各一行）',kind:'contact'}, 'profile-avatar':{label:'头像',kind:'avatar'}, summary:{label:'个人简介',kind:'summary'}, skills:{label:'技能（每行一项，级别用 | 分隔）',kind:'skills'}, awards:{label:'获奖情况',kind:'awards'},
   };
-  let label = simple[id]?.label ?? id; let kind = simple[id]?.kind ?? 'section-title';
+  const simpleMeta = Object.hasOwn(simple,id) ? simple[id] : undefined;
+  let label = simpleMeta?.label ?? id; let kind = simpleMeta?.kind ?? 'section-title';
   const custom=id.match(/^custom-(.+)-(title|content)$/);
   if(custom) { const item=resume.customSections.find(section=>section.id===custom[1]); if(!item)throw new Error('该栏目已不存在，请重新选择。'); label=`${item.title} > ${custom[2]==='title'?'标题':'内容'}`;kind=custom[2]==='title'?'custom-title':'custom-content'; }
-  const known=simple[id] || ['projects','experience','education','skills','awards'].some(section=>id===`${section}-section-title`) || custom || /^project-(\d+)-(title|description)$/.test(id) && Boolean(resume.projects[Number(id.split('-')[1])-1]) || /^experience-\d+$/.test(id) && Boolean(resume.experience[Number(id.split('-')[1])-1]) || /^education-\d+$/.test(id) && Boolean(resume.education[Number(id.split('-')[1])-1]);
+  const known=simpleMeta || ['projects','experience','education','skills','awards'].some(section=>id===`${section}-section-title`) || custom || /^project-(\d+)-(title|description)$/.test(id) && Boolean(resume.projects[Number(id.split('-')[1])-1]) || /^experience-\d+$/.test(id) && Boolean(resume.experience[Number(id.split('-')[1])-1]) || /^education-\d+$/.test(id) && Boolean(resume.education[Number(id.split('-')[1])-1]);
   if(!known)throw new Error('未知的简历组件，已拒绝修改。');
   const p = id.match(/^project-(\d+)-(title|description)$/);
   if(p) { label = `项目经历 > ${resume.projects[Number(p[1])-1]?.title??''} > ${p[2]==='title'?'标题':'描述'}`; kind=p[2]==='title'?'project-title':'project-description'; }
@@ -79,6 +87,8 @@ export function validatePatch(patch: EditPatch, selection: SelectionMeta): EditP
     : patch.path==='style.fontWeight' ? typeof patch.value==='number' && [400,500,600,700,800].includes(patch.value)
     : patch.path==='style.marginBottom' ? typeof patch.value==='number' && patch.value>=0 && patch.value<=40
     : patch.path==='style.accent' ? typeof patch.value==='boolean'
+    : patch.path==='style.fontFamily' ? FONT_IDS.some(id => id === patch.value)
+    : patch.path==='design.avatarScale' ? selection.kind==='avatar' && typeof patch.value==='number' && patch.value>=.75 && patch.value<=1.5
     : patch.path==='design.avatarShape' ? selection.kind==='avatar' && ['circle','square'].includes(String(patch.value)) : false;
   if(!safe) throw new Error('AI 返回了不受支持或超出范围的属性。');
   return patch;
@@ -92,6 +102,7 @@ export function applyPatch(resume: ResumeData, patch: EditPatch): ResumeData {
   if(patch.operation==='rewriteText') return updateContent(resume,patch.targetNodeId,String(patch.value));
   const next=cloneResume(resume);
   if(patch.path==='design.avatarShape') next.design.avatarShape=patch.value==='circle'?'circle':'square';
+  else if(patch.path==='design.avatarScale') next.design.avatarScale=Number(patch.value);
   else next.nodeStyles[patch.targetNodeId] = {...next.nodeStyles[patch.targetNodeId], [patch.path.replace('style.','')]:patch.value};
   return next;
 }

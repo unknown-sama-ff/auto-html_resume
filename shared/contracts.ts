@@ -3,6 +3,7 @@ import { TEMPLATE_IDS, FONT_IDS, DENSITY_IDS, HEADING_IDS, templateDesign } from
 const shortText = z.string().max(3000);
 const lines = z.array(shortText).max(30);
 export const nodeStyleSchema = z.object({
+  fontFamily: z.enum(FONT_IDS).optional(),
   color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
   fontSize: z.number().min(8).max(48).optional(),
   fontWeight: z.union([z.literal(400), z.literal(500), z.literal(600), z.literal(700), z.literal(800)]).optional(),
@@ -18,6 +19,7 @@ export const designSchema = z.object({
   paperColor: z.string().regex(/^#[0-9a-f]{6}$/i).default('#FBF8F1'),
   sectionGap: z.number().min(12).max(36).default(24),
   avatarShape: z.enum(['circle', 'square']).default('circle'),
+  avatarScale: z.number().min(0.75).max(1.5).default(1),
 });
 export const resumeSchema = z.object({
   name: z.string().min(1).max(120), role: z.string().max(200),
@@ -31,6 +33,10 @@ export const resumeSchema = z.object({
   education: z.array(z.object({ school: shortText, degree: shortText, period: z.string().max(100) })).max(8).default([]),
   awards: lines.default([]), design: designSchema.default(() => designSchema.parse({})),
   customSections: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9-]+$/).max(80), title: z.string().min(1).max(200), items: lines })).max(30).default([]),
+  sectionTitles: z.record(z.string().regex(/^[a-zA-Z0-9-]+$/).max(100), z.string().max(200)).default({}),
+  sectionOrder: z.array(z.string().regex(/^[a-zA-Z0-9-]+$/).max(100)).max(40).default([]),
+  sectionColumns: z.record(z.string().regex(/^[a-zA-Z0-9-]+$/).max(100), z.enum(['main', 'side', 'full'])).default({}),
+  hiddenSections: z.array(z.string().regex(/^[a-zA-Z0-9-]+$/).max(100)).max(40).default([]),
   nodeStyles: z.record(z.string().regex(/^[a-zA-Z0-9-]+$/).max(100), nodeStyleSchema).default({}),
 });
 const resumeEvidencePath = /^(?:summary|skills\.\d+\.label|projects\.\d+\.description\.\d+|experience\.\d+\.bullets\.\d+|education\.\d+\.(?:school|degree|period)|awards\.\d+|customSections\.\d+\.items\.\d+)$/;
@@ -126,6 +132,7 @@ function normalizeDesign(value: unknown) {
     ...(colorValue(source.paperColor) ? { paperColor: source.paperColor } : {}),
     ...(numberValue(source.sectionGap, 12, 36) !== undefined ? { sectionGap: source.sectionGap } : {}),
     ...(source.avatarShape === 'circle' || source.avatarShape === 'square' ? { avatarShape: source.avatarShape } : {}),
+    ...(numberValue(source.avatarScale, 0.75, 1.5) !== undefined ? { avatarScale: source.avatarScale } : {}),
   };
 }
 
@@ -134,6 +141,7 @@ function normalizeNodeStyles(value: unknown) {
   for (const [id, raw] of Object.entries(source)) {
     if (!/^[a-zA-Z0-9-]{1,100}$/.test(id)) continue;
     const style = asObject(raw); const safe: JsonObject = {};
+    if (FONT_IDS.includes(style.fontFamily as typeof FONT_IDS[number])) safe.fontFamily = style.fontFamily;
     const color = colorValue(style.color); if (color) safe.color = color;
     const fontSize = numberValue(style.fontSize, 8, 48); if (fontSize !== undefined) safe.fontSize = fontSize;
     if ([400, 500, 600, 700, 800].includes(style.fontWeight as number)) safe.fontWeight = style.fontWeight;
@@ -228,7 +236,7 @@ function normalizeResume(value: unknown, indexMaps: ContentIndexMaps = new Map()
     const items = linesValue(source[key]);
     if (items.length && !customSections.some(item => item.title === title)) customSections.push({ id: `extra-${key}`, title, items });
   }
-  const knownFields = new Set(['name','fullName','姓名','role','targetRole','desiredPosition','求职意向','目标岗位','location','city','所在地','城市','email','邮箱','phone','mobile','telephone','电话','手机','website','github','portfolio','网址','作品链接','summary','profile','overview','个人简介','个人概述','skills','projects','projectExperience','项目经历','项目经验','experience','workExperience','internships','employment','工作经历','实习经历','education','educationExperience','academicBackground','教育背景','教育经历','awards','certificates','honors','achievements','获奖','获奖情况','证书','customSections','extraSections','自定义栏目','其他栏目','courses','languages','publications','research','volunteering','interests','additionalInfo','design','nodeStyles','avatarDataUrl','resume','report','jobTitle','warnings','html','css','script','style','styles','layout']);
+  const knownFields = new Set(['sectionColumns','sectionOrder','hiddenSections','sectionTitles','name','fullName','姓名','role','targetRole','desiredPosition','求职意向','目标岗位','location','city','所在地','城市','email','邮箱','phone','mobile','telephone','电话','手机','website','github','portfolio','网址','作品链接','summary','profile','overview','个人简介','个人概述','skills','projects','projectExperience','项目经历','项目经验','experience','workExperience','internships','employment','工作经历','实习经历','education','educationExperience','academicBackground','教育背景','教育经历','awards','certificates','honors','achievements','获奖','获奖情况','证书','customSections','extraSections','自定义栏目','其他栏目','courses','languages','publications','research','volunteering','interests','additionalInfo','design','nodeStyles','avatarDataUrl','resume','report','jobTitle','warnings','html','css','script','style','styles','layout']);
   for (const [key,value] of Object.entries(source)) {
     if (knownFields.has(key) || value == null) continue;
     const items=asArray(typeof value==='object'&&!Array.isArray(value)?[value]:value).map(item=>typeof item==='object'?JSON.stringify(item):String(item)).filter(item=>item&&item!=='{}').map(item=>item.slice(0,3000)).slice(0,30);
@@ -239,7 +247,12 @@ function normalizeResume(value: unknown, indexMaps: ContentIndexMaps = new Map()
   const awards = linesValue(firstValue(source, ['awards', 'certificates', 'honors', 'achievements', '获奖', '获奖情况', '证书']), 30, awardIndices);
   return {
     name: textField(source, ['name', 'fullName', '姓名'], 120, '待补充') || '待补充', role: textField(source, ['role', 'targetRole', 'desiredPosition', '求职意向', '目标岗位'], 200), location: textField(source, ['location', 'city', '所在地', '城市'], 200), email: textField(source, ['email', '邮箱'], 200), phone: textField(source, ['phone', 'mobile', 'telephone', '电话', '手机'], 100), website: textField(source, ['website', 'github', 'portfolio', '网址', '作品链接'], 500),
-    summary: textField(source, ['summary', 'profile', 'overview', '个人简介', '个人概述'], 6000), skills, projects, experience, education, awards, customSections: customSections.slice(0, 30), design: normalizeDesign(source.design), nodeStyles: normalizeNodeStyles(source.nodeStyles),
+    summary: textField(source, ['summary', 'profile', 'overview', '个人简介', '个人概述'], 6000), skills, projects, experience, education, awards, customSections: customSections.slice(0, 30), design: normalizeDesign(source.design),
+    sectionTitles: Object.fromEntries(Object.entries(asObject(source.sectionTitles)).filter(([key, value]) => /^[a-zA-Z0-9-]{1,100}$/.test(key) && typeof value === 'string').map(([key, value]) => [key, String(value).slice(0, 200)])),
+    sectionOrder: Array.isArray(source.sectionOrder) ? source.sectionOrder.filter(value => typeof value === 'string' && /^[a-zA-Z0-9-]{1,100}$/.test(value)).slice(0, 40) : [],
+    sectionColumns: Object.fromEntries(Object.entries(asObject(source.sectionColumns)).filter(([key, value]) => /^[a-zA-Z0-9-]{1,100}$/.test(key) && ['main', 'side', 'full'].includes(String(value)))),
+    hiddenSections: Array.isArray(source.hiddenSections) ? source.hiddenSections.filter(value => typeof value === 'string' && /^[a-zA-Z0-9-]{1,100}$/.test(value)).slice(0, 40) : [],
+    nodeStyles: normalizeNodeStyles(source.nodeStyles),
   };
 }
 

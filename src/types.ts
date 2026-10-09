@@ -3,7 +3,7 @@ import type { resumeSchema, nodeStyleSchema, reportSchema, generationSchema, mat
 export type ResumeData = z.infer<typeof resumeSchema>;
 export type NodeStyle = z.infer<typeof nodeStyleSchema>;
 export type Project = ResumeData['projects'][number];
-export type NodeKind = 'page' | 'name' | 'role' | 'contact' | 'avatar' | 'summary' | 'section-title' | 'project-title' | 'project-description' | 'experience' | 'education' | 'skills' | 'awards' | 'custom-title' | 'custom-content';
+export type NodeKind = 'page' | 'name' | 'role' | 'contact' | 'avatar' | 'summary' | 'section-title' | 'project-title' | 'project-description' | 'experience' | 'education' | 'skills' | 'awards' | 'custom-title' | 'custom-content' | 'text';
 export type SelectionMeta = { id: string; label: string; breadcrumb: string; kind: NodeKind; path: string; content: string; style: Required<NodeStyle>; code: string; design?: ResumeData['design'] };
 export type EditPatch = { id: string; targetNodeId: string; operation: 'setStyle' | 'rewriteText' | 'setTheme'; path: string; value: string | number | boolean; reason: string; requiresConfirmation: boolean; preview: string };
 export type ChatMessage = { id: string; role: 'assistant' | 'user'; content: string; meta?: string };

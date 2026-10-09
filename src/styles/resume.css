@@ -50,6 +50,27 @@
 .resume-document.interactive-paper .resume-node:hover { outline: 1px dashed var(--resume-accent); outline-offset: 3px; }
 .resume-document .resume-node.is-selected { outline: 2px solid var(--resume-accent); outline-offset: 3px; box-shadow: none; }
 .resume-document .page-selection-control { top: 10px; right: 12px; }
+.resume-document.interactive-paper [contenteditable] { cursor: text; min-width: 12px; min-height: 1em; }
+.resume-document.interactive-paper [contenteditable]:empty::before { content: '填写'; color: #8b968d; font-size: 10px; }
+.resume-document.interactive-paper [contenteditable]:focus { outline: 2px solid var(--resume-accent); outline-offset: 4px; }
+.resume-document.interactive-paper .resume-node::after { display: none; }
+.resume-document.interactive-paper .editable-section { position: relative; border-radius: 3px; outline: 1px solid transparent; outline-offset: 8px; }
+.resume-document.interactive-paper .editable-section:hover, .resume-document.interactive-paper .editable-section:focus-within { outline-color: color-mix(in srgb,var(--resume-accent) 25%,white); }
+.resume-document.interactive-paper .section-edit-tools { display: flex; align-items: center; gap: 2px; position: absolute; top: -23px; right: 0; height: 23px; z-index: 5; border: 1px solid color-mix(in srgb,var(--resume-accent) 28%,white); border-radius: 4px; background: white; color: #51635a; font: 10px/1.1 "Segoe UI", "Microsoft YaHei", sans-serif; opacity: 0; transition: opacity 120ms; }
+.resume-document.interactive-paper .editable-section:hover > .section-edit-tools, .resume-document.interactive-paper .editable-section:focus-within > .section-edit-tools { opacity: 1; }
+.resume-document.interactive-paper .section-edit-tools button { display: grid; place-items: center; width: 24px; height: 22px; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; border-radius: 3px; }
+.resume-document.interactive-paper .section-edit-tools button:hover, .resume-document.interactive-paper .section-edit-tools button:focus-visible { background: #edf2ec; color: var(--resume-accent); outline: 1px solid var(--resume-accent); }
+.resume-document.interactive-paper .section-edit-tools > span { max-width: 76px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; padding: 0 3px; }
+.resume-document.interactive-paper .section-edit-tools .section-drag-handle { cursor: grab; touch-action: none; }
+.resume-document.interactive-paper .editable-section.is-dragging { opacity: .35; }
+.resume-document.interactive-paper .editable-section.is-drop-target { outline: 2px dashed var(--resume-accent); }
+.resume-document.interactive-paper .section-drop-column { min-height: 20px; }
+.resume-document.interactive-paper .section-drop-column.is-column-over { outline: 1px dashed var(--resume-accent); outline-offset: 10px; }
+.resume-document.interactive-paper .column-drop-hint { min-height: 32px; border: 1px dashed #cad8ce; color: #7a8c80; padding: 8px; text-align: center; font-size: 11px; }
+.resume-document.interactive-paper .resume-full-sections:has(> .column-drop-hint) { min-height: 0; }
+.resume-document.interactive-paper .resume-full-sections > .column-drop-hint { display: none; }
+.resume-document.export-paper { user-select: text; }
+@media (hover: none) { .resume-document.interactive-paper .section-edit-tools { opacity: 1; } }
 .resume-document.density-compact { line-height: 1.55; }
 .resume-document.density-compact .project-item, .resume-document.density-compact .experience-item { margin-bottom: 12px; }
 .resume-document.density-spacious { line-height: 1.85; }
@@ -98,9 +119,12 @@
   .resume-paper-wrap { width: 210mm !important; height: auto !important; min-height: 0 !important; padding: 0 !important; }
   .resume-paper.resume-document { position: static !important; width: 210mm !important; max-width: 210mm !important; min-height: 297mm; margin: 0; transform: none !important; box-shadow: none; overflow: visible; }
   .resume-document .page-selection-control { display: none; }
+  .resume-document .section-edit-tools, .resume-document .column-drop-hint { display: none !important; }
   .resume-document .resume-node { outline: none !important; box-shadow: none !important; }
   .resume-document .resume-node.is-selected::after { display: none !important; }
-  .resume-document .project-item, .resume-document .experience-item, .resume-document .education-item { break-inside: avoid; }
+  .resume-document .project-item { break-inside: auto; }
+  .resume-document .project-item h3, .resume-document .project-meta { break-after: avoid; }
+  .resume-document .experience-item, .resume-document .education-item { break-inside: avoid; }
   .resume-document .section-heading { break-after: avoid; }
   .resume-document.template-modern .resume-layout-shell { min-height: 297mm; }
   .resume-document p, .resume-document li { orphans: 2; widows: 2; }

@@ -62,6 +62,10 @@ export const initialResume: ResumeData = {
   education: [{ school: '同济大学', degree: '工业设计 · 学士', period: '2018 — 2022' }],
   awards: ['2023 · 中国设计智造大奖 · 入围', '2022 · 校级优秀毕业设计'],
   customSections: [],
+  sectionTitles: {},
+  sectionOrder: [],
+  sectionColumns: {},
+  hiddenSections: [],
   design: templateDesign('minimal'),
   nodeStyles: {},
 };

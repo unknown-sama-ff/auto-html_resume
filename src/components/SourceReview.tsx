@@ -15,7 +15,7 @@ export function SourceReview({ profileText, resume, onChange }: { profileText: s
     <label className="input-label">栏目名称<input aria-label="补充栏目名称" value={title} maxLength={195} onChange={e=>setTitle(e.target.value)}/></label>
     {chosen.length>0&&<button className="outline-button" onClick={()=>add(chosen,'从原文补回信息')}>将 {chosen.length} 条原文加入简历</button>}
     <label className="input-label">手动补充内容<textarea aria-label="补充栏目内容" value={content} maxLength={45000} rows={3} onChange={e=>setContent(e.target.value)} placeholder="每行一条，可添加课程、研究、语言、志愿活动等内容。"/></label><button className="outline-button" disabled={!content.trim()} onClick={()=>add(content.split('\n'),'新增自定义栏目')}>添加栏目</button>
-    {resume.customSections.length>0&&<div className="custom-section-list">{resume.customSections.map(item=><div key={item.id}><span>{item.title}</span><button className="ghost-button" aria-label={`删除栏目 ${item.title}`} onClick={()=>onChange({...resume,customSections:resume.customSections.filter(section=>section.id!==item.id)},`删除栏目 ${item.title}`)}>删除</button></div>)}</div>}
+    {resume.customSections.length>0&&<div className="custom-section-list">{resume.customSections.map(item=><div key={item.id}><span>{item.title}</span><button className="ghost-button" aria-label={`从核对区移除 ${item.title}`} onClick={()=>onChange({...resume,customSections:resume.customSections.filter(section=>section.id!==item.id)},`删除栏目 ${item.title}`)}>删除</button></div>)}</div>}
     {error&&<p role="alert">{error}</p>}
   </div></details>;
 }

@@ -1,6 +1,7 @@
 export const TEMPLATE_IDS = ['minimal', 'technical', 'editorial', 'academic', 'timeline', 'modern'] as const;
 export type TemplateId = typeof TEMPLATE_IDS[number];
-export const FONT_IDS = ['sans', 'serif', 'mono'] as const;
+export const FONT_IDS = ['sans', 'serif', 'mono', 'yahei', 'heiti', 'simsun', 'kaiti', 'fangsong', 'arial'] as const;
+export type FontId = typeof FONT_IDS[number];
 export const DENSITY_IDS = ['compact', 'comfortable', 'spacious'] as const;
 export const HEADING_IDS = ['line', 'accent', 'plain'] as const;
 
@@ -14,12 +15,29 @@ export const RESUME_TEMPLATES = [
 ] as const;
 
 export function templateById(id: TemplateId) { return RESUME_TEMPLATES.find(template => template.id === id)!; }
-export function templateDesign(id: TemplateId) { return { ...templateById(id).design, templateId: id, avatarShape: 'circle' as const }; }
+export function templateDesign(id: TemplateId) { return { ...templateById(id).design, templateId: id, avatarShape: 'circle' as const, avatarScale: 1 }; }
 export const FONT_STACKS = {
-  sans: '"Segoe UI", "Microsoft YaHei", sans-serif',
+  sans: '"Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
   serif: 'Georgia, "Noto Serif CJK SC", "SimSun", serif',
   mono: 'Consolas, "Microsoft YaHei", monospace',
-};
+  yahei: '"Microsoft YaHei", "微软雅黑", "PingFang SC", sans-serif',
+  heiti: '"SimHei", "黑体", "Heiti SC", "Microsoft YaHei", sans-serif',
+  simsun: '"SimSun", "宋体", "Songti SC", serif',
+  kaiti: '"KaiTi", "楷体", "Kaiti SC", "STKaiti", serif',
+  fangsong: '"FangSong", "仿宋", "STFangsong", "SimSun", serif',
+  arial: 'Arial, "Helvetica Neue", "Microsoft YaHei", sans-serif',
+} satisfies Record<FontId, string>;
+export const FONT_OPTIONS = [
+  { id: 'sans', label: '系统无衬线（雅黑 / 苹方）' },
+  { id: 'serif', label: '经典衬线（Georgia / 宋体）' },
+  { id: 'mono', label: '技术等宽（Consolas）' },
+  { id: 'yahei', label: '微软雅黑 · 清晰现代' },
+  { id: 'heiti', label: '黑体 · 简洁有力' },
+  { id: 'simsun', label: '宋体 · 正式传统' },
+  { id: 'kaiti', label: '楷体 · 书写风格' },
+  { id: 'fangsong', label: '仿宋 · 文雅规范' },
+  { id: 'arial', label: 'Arial · 英文商务' },
+] as const satisfies readonly { id: FontId; label: string }[];
 
 export function isDesignPatch(path: string, value: unknown) {
   if (path === 'design.templateId') return TEMPLATE_IDS.some(id => id === value);
