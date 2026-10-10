@@ -186,7 +186,7 @@
 @page { size: A4; margin: 0; }
 @media print {
   .resume-paper-wrap { width: 210mm !important; height: auto !important; min-height: 0 !important; padding: 0 !important; }
-  .resume-paper.resume-document { position: static !important; width: 210mm !important; max-width: 210mm !important; min-height: 297mm; margin: 0; transform: none !important; box-shadow: none; overflow: visible; }
+  .resume-paper.resume-document { position: static !important; width: 210mm !important; max-width: 210mm !important; min-height: 297mm; margin: 0; padding-bottom: 0 !important; transform: none !important; box-shadow: none; overflow: visible; }
   .resume-document .page-selection-control { display: none; }
   .resume-document .section-edit-tools, .resume-document .column-drop-hint { display: none !important; }
   .resume-document .resume-node { outline: none !important; box-shadow: none !important; }

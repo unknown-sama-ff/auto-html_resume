@@ -4,10 +4,10 @@ on:
   pull_request:
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -18,3 +18,11 @@ jobs:
       - run: node --check server/index.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
