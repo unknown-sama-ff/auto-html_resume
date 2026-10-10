@@ -40,7 +40,7 @@ test('analysis is translated while arbitrary generation stage metadata is hidden
 
 test('reasoning rejection is not mislabeled as model unavailable',()=>{
   const parsed=describeBadRequest({error:{code:'unsupported_parameter',param:'reasoning_effort',message:'The model does not support reasoning_effort'}});
-  assert.equal(parsed.diagnostic,'reasoning_parameter');assert.equal(parsed.upstreamParam,'reasoning_effort');assert.match(parsed.hint,/不等于模型不存在/);
+  assert.equal(parsed.diagnostic,'reasoning_parameter');assert.equal(parsed.upstreamParam,'reasoning_effort');assert.match(parsed.hint,/不等于模型不存在/);assert.match(parsed.hint,/作者预设固定为medium/);
   assert.equal(describeBadRequest({error:{code:'model_not_found',param:'model'}}).diagnostic,'model_unavailable');
 });
 

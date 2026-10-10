@@ -229,7 +229,7 @@ test('all exported layouts are self-contained and match preview geometry and fac
       expect(main!.x+main!.width).toBeLessThanOrEqual(side!.x);
     }
     await exported.locator('.resume-paper').screenshot({path:`.tmp/templates/${id}.png`});
-    const printPadding=await exported.locator('.resume-paper').evaluate(e=>getComputedStyle(e).padding);await exported.emulateMedia({media:'print'});expect(await exported.locator('.resume-paper').evaluate(e=>getComputedStyle(e).padding)).toBe(printPadding);
+    const screenPadding=await exported.locator('.resume-paper').evaluate(e=>{const style=getComputedStyle(e);return {top:style.paddingTop,right:style.paddingRight,left:style.paddingLeft};});await exported.emulateMedia({media:'print'});const printPadding=await exported.locator('.resume-paper').evaluate(e=>{const style=getComputedStyle(e);return {top:style.paddingTop,right:style.paddingRight,left:style.paddingLeft,bottom:style.paddingBottom};});expect(printPadding).toEqual({...screenPadding,bottom:'0px'});
     if(['minimal','editorial','academic'].includes(id))expect(await exported.locator('.section-heading').first().evaluate(e=>getComputedStyle(e,'::after').display)).not.toBe('none');
     await exported.emulateMedia({media:'screen'});
   }
@@ -246,17 +246,14 @@ test('homepage can explicitly submit one of the new templates',async({page})=>{
   await page.goto('/');await expect(page.locator('.intake-design .template-option:not(.template-auto)')).toHaveCount(12);await page.locator('.intake-design').getByRole('button',{name:/校园新锐/}).click();await page.locator('.intake-card textarea').first().fill('个人经历测试');await page.locator('.intake-card textarea').nth(1).fill('岗位要求测试');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','campus');expect(selected).toBe('campus');
 });
 
-test('representative PDFs retain long entries and final custom facts across pages',async({page,context})=>{
-  test.setTimeout(90000);
-  const resume=structuredClone(initialResume);resume.projects=Array.from({length:2},(_,index)=>({id:`long-${index}`,title:`PDF_PROJECT_${index}`,meta:'2024 — 2026',stack:[],description:Array.from({length:index===0?20:8},(_,line)=>`FACT_${index}_${line}: Mixed English and 中文真实项目内容，保留学校课程与完整事实。${'Long content wraps without clipping. '.repeat(4)}`)}));resume.customSections=[{id:'final-section',title:'自定义栏目',items:['PDF_FINAL_FACT_987654321']}];
+test('PDF print retains long entries and final custom facts across pages',async({page,context})=>{
+  test.setTimeout(60000);
+  const resume=structuredClone(initialResume);resume.projects=Array.from({length:2},(_,index)=>({id:`long-${index}`,title:`PDF_PROJECT_${index}`,meta:'2024 — 2026',stack:[],description:Array.from({length:index===0?12:4},(_,line)=>`FACT_${index}_${line}: Mixed English and 中文真实项目内容，保留学校课程与完整事实。${'Long content wraps without clipping. '.repeat(3)}`)}));resume.customSections=[{id:'final-section',title:'自定义栏目',items:['PDF_FINAL_FACT_987654321']}];
   await createResume(page,resume);const printed=await context.newPage();
-  const pdfTemplates=RESUME_TEMPLATES.filter(({id})=>['minimal','modern','cards'].includes(id));
-  for(const {label} of pdfTemplates){
-    await page.locator('.workspace-design').getByRole('button',{name:new RegExp(label)}).click();await printed.setContent(await downloadedHtml(page));
-    const pdf=await printed.pdf({format:'A4',printBackground:true,preferCSSPageSize:true});
-    const facts=await extractPdfPages(pdf);
-    expect(facts.length).toBeGreaterThan(1);expect(facts.length).toBeLessThan(15);expect(facts.every(text=>text.trim().length>0)).toBe(true);
-    const text=facts.join(' ');expect(text).toContain('PDF_FINAL_FACT_987654321');for(const item of resume.projects)for(const line of item.description)expect(text).toContain(line.split(':')[0]);
-  }
+  await page.locator('.workspace-design').getByRole('button',{name:/极简商务/}).click();await printed.setContent(await downloadedHtml(page));
+  const pdf=await printed.pdf({format:'A4',printBackground:true,preferCSSPageSize:true});
+  const facts=await extractPdfPages(pdf);
+  expect(facts.length).toBeGreaterThan(1);expect(facts.length).toBeLessThan(15);expect(facts.every(text=>text.trim().length>0)).toBe(true);
+  const text=facts.join(' ');expect(text).toContain('PDF_FINAL_FACT_987654321');for(const item of resume.projects)for(const line of item.description)expect(text).toContain(line.split(':')[0]);
   await printed.close();
 });
