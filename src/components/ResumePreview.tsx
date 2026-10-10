@@ -40,22 +40,39 @@ export function ResumePreview({ resume, selectedNodeId = '', onSelect, scale = 1
       const siblings = sections.filter(id => sectionColumn(resume, id) === currentColumn);
       const index = currentId.startsWith('column-') ? -1 : siblings.indexOf(currentId);
       target = siblings[index + (event.code === 'ArrowDown' ? 1 : -1)] ?? null;
+      if (!target && resume.design.templateId === 'portfolio') {
+        const adjacent = event.code === 'ArrowDown' && currentColumn === 'main' ? 'side'
+          : event.code === 'ArrowUp' && currentColumn === 'side' ? 'main' : null;
+        if (adjacent) {
+          const candidates = sections.filter(id => sectionColumn(resume, id) === adjacent && id !== activeId);
+          target = (event.code === 'ArrowDown' ? candidates[0] : candidates.at(-1)) ?? 'column-' + adjacent;
+        }
+      }
     } else {
       const currentRect = context.droppableRects.get(currentId);
       if (currentRect) {
         const center = currentRect.left + currentRect.width / 2;
         const direction = event.code === 'ArrowRight' ? 1 : -1;
-        const adjacent = (['main', 'side'] as const).filter(column => column !== currentColumn)
+        const spatialAdjacent = (['main', 'side'] as const).filter(column => column !== currentColumn)
           .map(column => ({ column, rect: context.droppableRects.get('column-' + column) }))
           .filter(entry => entry.rect && direction * (entry.rect.left + entry.rect.width / 2 - center) > 1)
           .sort((a, b) => Math.abs(a.rect!.left + a.rect!.width / 2 - center) - Math.abs(b.rect!.left + b.rect!.width / 2 - center))[0];
+        // The gallery's support index sits below the main area; retain left/right column navigation there.
+        const stackedColumn = resume.design.templateId === 'portfolio'
+          ? event.code === 'ArrowRight' && currentColumn === 'main' ? 'side'
+            : event.code === 'ArrowLeft' && currentColumn === 'side' ? 'main' : null
+          : null;
+        const adjacent = stackedColumn ? { column: stackedColumn, rect: context.droppableRects.get('column-' + stackedColumn) } : spatialAdjacent;
         if (adjacent) {
-          const candidates = sections.filter(id => sectionColumn(resume, id) === adjacent.column && id !== activeId);
-          target = candidates.sort((a, b) => {
-            const aRect = context.droppableRects.get(a), bRect = context.droppableRects.get(b);
-            return Math.abs((aRect?.top ?? 0) + (aRect?.height ?? 0) / 2 - currentRect.top - currentRect.height / 2)
-              - Math.abs((bRect?.top ?? 0) + (bRect?.height ?? 0) / 2 - currentRect.top - currentRect.height / 2);
-          })[0] ?? 'column-' + adjacent.column;
+          if (stackedColumn) target = 'column-' + adjacent.column;
+          else {
+            const candidates = sections.filter(id => sectionColumn(resume, id) === adjacent.column && id !== activeId);
+            target = candidates.sort((a, b) => {
+              const aRect = context.droppableRects.get(a), bRect = context.droppableRects.get(b);
+              return Math.abs((aRect?.top ?? 0) + (aRect?.height ?? 0) / 2 - currentRect.top - currentRect.height / 2)
+                - Math.abs((bRect?.top ?? 0) + (bRect?.height ?? 0) / 2 - currentRect.top - currentRect.height / 2);
+            })[0] ?? 'column-' + adjacent.column;
+          }
         }
       }
     }
@@ -161,7 +178,9 @@ export function ResumePreview({ resume, selectedNodeId = '', onSelect, scale = 1
   function column(id: SectionColumn, className: string) { return <DropColumn column={id} ids={columns[id]} enabled={editable} className={className}>{columns[id].map(section)}</DropColumn>; }
   let body: ReactNode;
   if (template === 'modern') body = <div className="resume-layout-shell"><aside className="resume-identity-panel">{identity}{column('side', 'resume-side-sections')}</aside><main className="resume-main-column">{column('full', 'resume-full-sections')}{column('main', 'resume-main-sections')}</main></div>;
-  else if (template === 'minimal' || template === 'academic') body = <>{identity}{column('full', 'resume-full-sections')}<main className="resume-body-single">{column('main', 'resume-main-sections')}</main></>;
+  else if (template === 'minimal' || template === 'academic' || template === 'compact' || template === 'classic') body = <>{identity}{column('full', 'resume-full-sections')}<main className="resume-body-single">{column('main', 'resume-main-sections')}</main></>;
+  else if (template === 'portfolio') body = <>{identity}{column('full', 'resume-full-sections')}<main className="resume-body-single">{column('main', 'resume-main-sections')}</main>{column('side', 'resume-support-grid')}</>;
+  else if (template === 'campus') body = <>{identity}{column('full', 'resume-full-sections')}<div className="resume-grid">{column('side', 'resume-side-column')}{column('main', 'resume-main-column')}</div></>;
   else body = <>{identity}{column('full', 'resume-full-sections')}<div className="resume-grid">{column('main', 'resume-main-column')}{column('side', 'resume-side-column')}</div></>;
   function finishDrag(event: DragEndEvent) {
     const keyboard = keyboardDrag.current, keyboardId = keyboardTarget.current;

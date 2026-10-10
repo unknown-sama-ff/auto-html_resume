@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TEMPLATE_IDS, FONT_IDS, DENSITY_IDS, HEADING_IDS, templateDesign } from './design.ts';
+import { REASONING_EFFORTS } from './errorDiagnostics.ts';
 const shortText = z.string().max(3000);
 const lines = z.array(shortText).max(30);
 export const nodeStyleSchema = z.object({
@@ -52,7 +53,7 @@ export const reportSchema = z.object({
 });
 export const generationSchema = z.object({ resume: resumeSchema, jobTitle: z.string().min(1).max(200), report: reportSchema, warnings: z.array(z.string().max(1000)).max(20).default([]) });
 export const materialSchema = z.object({ name: z.string().max(200), mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']), dataUrl: z.string().max(2800000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/) });
-export const modelConfigSchema = z.object({ mode: z.enum(['preset', 'custom']), presetId: z.string().max(100), url: z.string().max(2000).default(''), model: z.string().max(200).default(''), apiKey: z.string().max(2000).optional() });
+export const modelConfigSchema = z.object({ mode: z.enum(['preset', 'custom']), presetId: z.string().max(100), url: z.string().max(2000).default(''), model: z.string().max(200).default(''), apiKey: z.string().max(2000).optional(), reasoningEffort: z.enum(REASONING_EFFORTS).optional() });
 export const generationRequestSchema = z.object({ profileText: z.string().max(50000), jobText: z.string().max(50000), templateId: z.enum(['auto', ...TEMPLATE_IDS]).default('auto'), profileImages: z.array(materialSchema).max(1).default([]), jobImages: z.array(materialSchema).max(1).default([]), config: modelConfigSchema }).refine(v => Boolean(v.profileText.trim() || v.profileImages.length) && Boolean(v.jobText.trim() || v.jobImages.length), '请提供个人资料和岗位要求');
 export function parseModelJson(content: string): unknown {
   const text = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();

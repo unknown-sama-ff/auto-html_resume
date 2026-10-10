@@ -1,7 +1,7 @@
 import { DEFAULT_AI_TIMEOUT_MS, parseAiTimeoutMs } from '../../shared/requestTimeout';
 import type { ModelConfig } from '../types';
 import type { CompletionMessage } from '../../shared/generation';
-import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest } from '../../shared/modelProtocol';
+import { resolveModelEndpoint, buildModelRequest, extractModelText, describeBadRequest, parseReasoningEffort } from '../../shared/modelProtocol';
 
 export function normalizeDirectUrl(input: string, pageProtocol?: string): string {
   const {url}=resolveModelEndpoint(input);
@@ -13,6 +13,7 @@ export async function requestDirectModel(config: ModelConfig, messages: Completi
   const url=normalizeDirectUrl(config.url,typeof window==='undefined'?undefined:window.location.protocol);
   const {protocol}=resolveModelEndpoint(url);
   const model=config.model.trim();if(!model)throw new Error('请填写自定义模型名称。');
+  const reasoningEffort=parseReasoningEffort(config.reasoningEffort??'none');
   const headers:Record<string,string>={'Content-Type':'application/json'};
   if(config.apiKey.trim())headers.Authorization=`Bearer ${config.apiKey.trim()}`;
   const timeoutMs=parseAiTimeoutMs(options.timeoutMs??DEFAULT_AI_TIMEOUT_MS);
@@ -20,7 +21,7 @@ export async function requestDirectModel(config: ModelConfig, messages: Completi
   const combined=signal?AbortSignal.any([signal,timeout]):timeout;
   try{
     // This is deliberately a browser-to-provider request: never proxy or retry via /api.
-    const response=await fetch(url,{method:'POST',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:combined,headers,body:JSON.stringify(buildModelRequest(model,messages,protocol))});
+    const response=await fetch(url,{method:'POST',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:combined,headers,body:JSON.stringify(buildModelRequest(model,messages,protocol,reasoningEffort))});
     if(!response.ok){
       if(response.status===401||response.status===403)throw new Error('自定义通道鉴权失败，请检查你的Key和权限。');
       if(response.status===400){

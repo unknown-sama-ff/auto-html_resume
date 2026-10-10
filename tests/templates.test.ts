@@ -5,15 +5,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ResumePreview } from '../src/components/ResumePreview';
 import { initialResume } from '../src/data';
 import { designSchema, resumeSchema } from '../shared/contracts';
-import { RESUME_TEMPLATES, templateDesign } from '../shared/design';
+import { RESUME_TEMPLATES, TEMPLATE_IDS, templateDesign } from '../shared/design';
 import { buildGenerationMessages, parseGeneration } from '../shared/generation';
 import { buildEditMessages, parseEditPatch } from '../shared/edit';
 import { applyTemplate } from '../src/lib/design';
 import { applyPatch, getNodeMeta, updateContent, validatePatch } from '../src/lib/ai';
 import { appendCustomSection, unmatchedSourceLines } from '../src/lib/sourceReview';
 import { emptyWorkspace, makeVersion, migrateWorkspace, workspaceReducer } from '../src/lib/workspace';
+import { moveSection, orderedSections, sectionColumn } from '../src/lib/sections';
 
-test('six layouts render all facts and stable selectable IDs with distinct reading arrangements',()=>{
+test('all layouts render all facts and stable selectable IDs with distinct reading arrangements',()=>{
   const resume=appendCustomSection(initialResume,'语言与研究',['English C1','OTHER_FACT_001']);
   const keys=['profile-name','project-1-title','project-1-description','education-1',`custom-${resume.customSections[0].id}-content`];
   for(const {id} of RESUME_TEMPLATES){
@@ -25,7 +26,75 @@ test('six layouts render all facts and stable selectable IDs with distinct readi
     assert.deepEqual(changed.customSections,resume.customSections);
     assert.deepEqual(changed.projects,resume.projects);
     if(id==='academic')assert.ok(html.indexOf('data-section="education"')<html.indexOf('data-section="projects"'));
+    if(id==='executive')assert.ok(html.indexOf('data-section="experience"')<html.indexOf('data-section="projects"'));
     if(id==='modern')assert.ok(html.includes('resume-identity-panel'));
+    if(id==='portfolio')assert.ok(html.includes('resume-support-grid'));
+    if(id==='compact')assert.equal(sectionColumn(changed,'skills'),'main');
+  }
+});
+
+test('the three new templates expose their promised reading order and column semantics',()=>{
+  assert.equal(RESUME_TEMPLATES.length,12);
+  assert.deepEqual([...TEMPLATE_IDS].slice(-3),['campus','classic','cards']);
+
+  const campus=applyTemplate(initialResume,'campus');
+  assert.equal(sectionColumn(campus,'summary'),'full');
+  for(const id of ['education','skills','awards'])assert.equal(sectionColumn(campus,id),'side');
+  for(const id of ['projects','experience'])assert.equal(sectionColumn(campus,id),'main');
+  assert.deepEqual(orderedSections(campus),['summary','education','skills','awards','projects','experience']);
+  const campusHtml=renderToStaticMarkup(createElement(ResumePreview,{resume:campus,interactive:false}));
+  assert.ok(campusHtml.indexOf('data-section="education"')<campusHtml.indexOf('data-section="projects"'));
+
+  const classic=applyTemplate(initialResume,'classic');
+  assert.equal(sectionColumn(classic,'summary'),'full');
+  for(const id of ['projects','experience','education','skills','awards'])assert.equal(sectionColumn(classic,id),'main');
+  assert.equal(classic.design.fontFamily,'serif');
+  const classicHtml=renderToStaticMarkup(createElement(ResumePreview,{resume:classic,interactive:false}));
+  assert.match(classicHtml,/template-classic/);assert.match(classicHtml,/data-node-id="profile-contact"/);
+  assert.ok(classicHtml.indexOf('data-section="summary"')<classicHtml.indexOf('data-section="experience"'));
+
+  const cards=applyTemplate(initialResume,'cards');
+  assert.equal(sectionColumn(cards,'summary'),'full');
+  for(const id of ['skills','education','awards'])assert.equal(sectionColumn(cards,id),'side');
+  for(const id of ['projects','experience'])assert.equal(sectionColumn(cards,id),'main');
+  const cardsHtml=renderToStaticMarkup(createElement(ResumePreview,{resume:cards,interactive:false}));
+  assert.match(cardsHtml,/template-cards/);assert.match(cardsHtml,/resume-grid/);
+});
+
+test('new templates preserve custom facts when moved and render either column empty',()=>{
+  const resume=appendCustomSection(initialResume,'自定义事实',['NEW_TEMPLATE_FACT_123']);
+  const custom='custom-'+resume.customSections[0].id;
+  for(const id of ['campus','classic','cards'] as const){
+    for(const column of ['main','side'] as const){
+      let next=applyTemplate(resume,id);
+      next=moveSection(next,custom,null,column);
+      assert.equal(sectionColumn(next,custom),id==='classic'?'main':column);
+      assert.deepEqual(next.customSections,resume.customSections);
+      next.hiddenSections=['projects','experience','education','skills','awards'];
+      const html=renderToStaticMarkup(createElement(ResumePreview,{resume:next,interactive:false}));
+      assert.ok(html.includes('NEW_TEMPLATE_FACT_123'));
+      assert.match(html,new RegExp(`data-node-id="${custom}-content"`));
+      assert.ok(!html.includes('data-section="projects"'));
+      assert.ok(!html.includes('data-section="education"'));
+    }
+  }
+});
+
+test('every template is admitted by generation, AI edits and saved versions',()=>{
+  assert.deepEqual(RESUME_TEMPLATES.map(({id})=>id),[...TEMPLATE_IDS]);
+  const messages=JSON.stringify(buildGenerationMessages({config:{mode:'preset',presetId:'test'},profileText:'个人资料',jobText:'岗位',templateId:'auto'}));
+  const editMessages=JSON.stringify(buildEditMessages('切换模板',getNodeMeta(initialResume,'page')));
+  for(const id of TEMPLATE_IDS){
+    const design=templateDesign(id);
+    assert.equal(designSchema.safeParse(design).success,true);
+    assert.ok(messages.includes(id));assert.ok(editMessages.includes(id));
+    const parsed=parseGeneration(JSON.stringify({resume:{...initialResume,design},jobTitle:'工程师',report:{summary:'',requirements:[]},warnings:[]}));
+    assert.equal(parsed.resume.design.templateId,id);
+    const patch=parseEditPatch(JSON.stringify({targetNodeId:'page',operation:'setTheme',path:'design.templateId',value:id,reason:'切换布局',preview:'整页模板',requiresConfirmation:true}),'page');
+    assert.equal(applyPatch(initialResume,patch).design.templateId,id);
+    const version=makeVersion(parsed);
+    const saved=workspaceReducer(emptyWorkspace,{type:'add',version});
+    assert.equal(migrateWorkspace(JSON.parse(JSON.stringify(saved))).versions[0].resume.design.templateId,id);
   }
 });
 

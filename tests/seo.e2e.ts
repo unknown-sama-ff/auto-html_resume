@@ -17,6 +17,7 @@ test('home provides consistent search metadata and one interactive introduction 
   expect(structured['@graph'].map((item: { url: string }) => item.url)).toEqual(['https://esjl.asia/', 'https://esjl.asia/']);
   await expect(page.locator('.landing-static')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.locator('.landing-hero > p')).toContainText('「easy 简历」');
   await expect(page.locator('.landing-guide')).toContainText('自定义AI模型可能按服务商规则计费');
   expect(errors).toEqual([]);
 });
@@ -67,6 +68,7 @@ test.describe('HTML discovery without JavaScript', () => {
     const introduction = page.getByRole('main');
     for (const phrase of ['免费简历', '一键简历', 'AI简历', '生成简历']) await expect(introduction).toContainText(phrase);
     await expect(introduction).toContainText('请启用浏览器的JavaScript');
+    await expect(page.locator('.landing-hero > p')).toContainText('「easy 简历」');
     await expect(page.getByRole('link', { name: '作者 Bilibili 主页' })).toHaveAttribute('href', 'https://space.bilibili.com/661830801');
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://esjl.asia/');
   });

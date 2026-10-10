@@ -129,7 +129,7 @@ async function requestModel(config, messages, context, budget) {
     return extractModelText(payload, provider.protocol);
   } catch(error) {
     if(signal.aborted && (error?.name==='TimeoutError'||error?.name==='AbortError')) {
-      throw Object.assign(new Error(`模型请求达到 ${Math.round(timeoutMs/1000)} 秒等待上限，资料已保留。请降低推理强度、缩短资料，或检查中转排队；不会自动重试。`),{name:'TimeoutError',diagnostic:'request_timeout'});
+      throw Object.assign(new Error(`模型请求达到 ${Math.round(timeoutMs/1000)} 秒等待上限，资料已保留。请缩短资料，或检查中转排队；不会自动重试。`),{name:'TimeoutError',diagnostic:'request_timeout'});
     }
     throw error;
   } finally {
@@ -144,7 +144,7 @@ function sendFailure(response,error) {
   else if(error?.diagnostic==='upstream_timeout'){status=504;}
   else if(error?.name==='TimeoutError'||error?.name==='AbortError'){status=504;message=error.diagnostic==='request_timeout'?error.message:'模型请求超时，资料已保留，请重试。';}
   else if(error?.name==='SyntaxError')message='模型返回内容不是有效JSON，请核对接口协议后重试。';
-  else if(![400,401,403].includes(error?.upstreamStatus))status=/尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL|CF_API_REASONING_EFFORT|AI_REQUEST_TIMEOUT_MS/.test(message)?400:502;
+  else if(![400,401,403].includes(error?.upstreamStatus))status=/尚未配置|请输入|未被允许|私网|本地|频繁|没有可用|浏览器直连|CF_API_KEY|CF_API_PROTOCOL|AI_REQUEST_TIMEOUT_MS/.test(message)?400:502;
   const context=response.locals.aiDiagnostics;
   const extra={
     ...(context?{requestId:context.requestId,diagnostics:context.details}:{}),

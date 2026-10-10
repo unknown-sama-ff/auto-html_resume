@@ -14,7 +14,8 @@ async function downloadedHtml(page:import('@playwright/test').Page) {
   const stream=await download.createReadStream();const chunks:Buffer[]=[];for await(const chunk of stream!)chunks.push(Buffer.from(chunk));return Buffer.concat(chunks).toString('utf8');
 }
 
-test('six templates retain selection, facts, undo, duplication and local persistence',async({page})=>{
+test('all templates retain selection, facts, undo, duplication and local persistence',async({page})=>{
+  test.setTimeout(90000);
   await createResume(page);await page.locator('[data-node-id="project-1-title"]').click();
   for(const {id,label} of RESUME_TEMPLATES){
     await page.locator('.workspace-design').getByRole('button',{name:new RegExp(label)}).click();
@@ -23,9 +24,9 @@ test('six templates retain selection, facts, undo, duplication and local persist
     await expect(page.locator('[data-node-id="project-1-title"]')).toHaveClass(/is-selected/);
     await expect(page.locator('.selected-context-chip')).toContainText(initialResume.projects[0].title);
   }
-  await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','timeline');
-  await page.getByRole('button',{name:'重做',exact:true}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','modern');
-  await page.getByRole('button',{name:'复制当前版本'}).click();const id=await page.locator('.version-select').inputValue();await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'打开版本侧边栏'}).click();await page.locator(`.version-item[data-version-id="${id}"]`).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','modern');
+  await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-2)!.id);
+  await page.getByRole('button',{name:'重做',exact:true}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-1)!.id);
+  await page.getByRole('button',{name:'复制当前版本'}).click();const id=await page.locator('.version-select').inputValue();await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'打开版本侧边栏'}).click();await page.locator(`.version-item[data-version-id="${id}"]`).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-1)!.id);
 });
 
 test('page design suggestions preview before confirmation and send only selected design context',async({page})=>{
@@ -56,17 +57,164 @@ test('generic HTML headings and table cells keep unfamiliar sections before gene
 });
 
 test('mobile template controls do not introduce horizontal page overflow',async({page})=>{
+  test.setTimeout(90000);
   await page.setViewportSize({width:390,height:844});await createResume(page);
-  await page.locator('.workspace-design').getByRole('button',{name:/现代侧栏/}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','modern');expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
+  for(const {id,label} of RESUME_TEMPLATES){
+    await page.locator('.workspace-design').getByRole('button',{name:new RegExp(label)}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',id);expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
+  }
+});
+
+test('portfolio keyboard drag moves between the main area and stacked support index',async({page})=>{
+  await createResume(page);
+  await page.locator('.workspace-design').getByRole('button',{name:/作品展示/}).click();
+  const main=page.locator('.resume-main-sections'),support=page.locator('.resume-support-grid');
+  async function move(label:string,direction:string){
+    const handle=page.getByRole('button',{name:'拖动栏目 '+label,exact:true});
+    await handle.scrollIntoViewIfNeeded();await handle.hover();await handle.focus();
+    const overlay=page.locator('.section-drag-overlay').filter({hasText:label});
+    await page.keyboard.press('Space');await expect(overlay).toBeVisible();
+    await page.keyboard.press(direction);await page.keyboard.press('Space');await expect(overlay).toBeHidden();
+  }
+  async function undo(){await page.locator('.preview-toolbar').getByRole('button',{name:'撤销',exact:true}).click();}
+  await move('项目经历','ArrowRight');
+  await expect(support.locator('[data-section="projects"]')).toHaveCount(1);
+  await expect(main.locator('[data-section="projects"]')).toHaveCount(0);
+  await undo();await expect(main.locator('[data-section="projects"]')).toHaveCount(1);
+  await move('教育经历','ArrowLeft');
+  await expect(main.locator('[data-section="education"]')).toHaveCount(1);
+  await expect(support.locator('[data-section="education"]')).toHaveCount(0);
+  await undo();await expect(support.locator('[data-section="education"]')).toHaveCount(1);
+  await move('工作 / 实习经历','ArrowDown');
+  await expect(support.locator('[data-section="experience"]')).toHaveCount(1);
+  await undo();await expect(main.locator('[data-section="experience"]')).toHaveCount(1);
+  await move('核心技能','ArrowUp');
+  await expect(main.locator('[data-section="skills"]')).toHaveCount(1);
+  await expect(support.locator('[data-section="skills"]')).toHaveCount(0);
+  for(const fact of [initialResume.projects[0].title,initialResume.education[0].school,initialResume.skills[0].label])await expect(page.locator('.resume-paper')).toContainText(fact);
+});
+
+test('campus supports left/right keyboard moves including an empty side column',async({page})=>{
+  const resume=structuredClone(initialResume);resume.education=[];resume.skills=[];resume.awards=[];
+  resume.customSections=[{id:'keyboard-facts',title:'语言与研究',items:['NEW_TEMPLATE_CUSTOM_FACT']}];
+  await createResume(page,resume);
+  await page.locator('.workspace-design').getByRole('button',{name:/校园新锐/}).click();
+  const main=page.locator('.resume-main-column, .resume-main-sections').last();
+  const side=page.locator('.resume-side-column, .resume-side-sections').last();
+  async function move(label:string,direction:string){
+    const handle=page.getByRole('button',{name:'拖动栏目 '+label,exact:true});
+    await handle.scrollIntoViewIfNeeded();await handle.hover();await handle.focus();
+    const overlay=page.locator('.section-drag-overlay').filter({hasText:label});
+    await page.keyboard.press('Space');await expect(overlay).toBeVisible();
+    await page.keyboard.press(direction);await page.keyboard.press('Space');await expect(overlay).toBeHidden();
+  }
+  await expect(side.locator('[data-section]')).toHaveCount(0);
+  await move('项目经历','ArrowLeft');
+  await expect(side.locator('[data-section="projects"]')).toHaveCount(1);
+  await expect(main.locator('[data-section="projects"]')).toHaveCount(0);
+  await move('项目经历','ArrowRight');
+  await expect(main.locator('[data-section="projects"]')).toHaveCount(1);
+  await expect(side.locator('[data-section="projects"]')).toHaveCount(0);
+  await move('语言与研究','ArrowLeft');
+  await expect(side.locator('[data-section="custom-keyboard-facts"]')).toContainText('NEW_TEMPLATE_CUSTOM_FACT');
+  await move('语言与研究','ArrowRight');
+  await expect(main.locator('[data-section="custom-keyboard-facts"]')).toContainText('NEW_TEMPLATE_CUSTOM_FACT');
+});
+
+test('new template cards uses the same conventional left/right column navigation',async({page})=>{
+  await createResume(page);await page.locator('.workspace-design').getByRole('button',{name:/信息卡片/}).click();
+  const main=page.locator('.resume-main-column, .resume-main-sections').last();
+  const side=page.locator('.resume-side-column, .resume-side-sections').last();
+  const handle=page.getByRole('button',{name:'拖动栏目 项目经历',exact:true});await handle.scrollIntoViewIfNeeded();await handle.hover();await handle.focus();
+  const overlay=page.locator('.section-drag-overlay').filter({hasText:'项目经历'});
+  await page.keyboard.press('Space');await expect(overlay).toBeVisible();await page.keyboard.press('ArrowRight');await page.keyboard.press('Space');await expect(overlay).toBeHidden();
+  await expect(side.locator('[data-section="projects"]')).toHaveCount(1);await expect(main.locator('[data-section="projects"]')).toHaveCount(0);
+});
+
+test('cards heading choices control title borders in preview and exported HTML',async({page,context})=>{
+  await createResume(page);await page.locator('.workspace-design').getByRole('button',{name:/信息卡片/}).click();
+  await expect(page.getByLabel('标题风格')).toHaveValue('plain');
+  const exported=await context.newPage();
+  for(const mode of ['plain','accent','line']){
+    if(mode!=='plain')await page.getByLabel('标题风格').selectOption(mode);
+    const border=mode==='line'?1:0;
+    expect(await page.locator('.section-heading').evaluateAll(elements=>elements.map(element=>parseFloat(getComputedStyle(element).borderBottomWidth)))).toEqual(Array(await page.locator('.section-heading').count()).fill(border));
+    await exported.setContent(await downloadedHtml(page));
+    expect(await exported.locator('.section-heading').evaluateAll(elements=>elements.map(element=>parseFloat(getComputedStyle(element).borderBottomWidth)))).toEqual(Array(await exported.locator('.section-heading').count()).fill(border));
+  }
+  await exported.close();
+});
+
+test('new templates wrap long edited experience periods within column and paper bounds',async({page,context})=>{
+  test.setTimeout(60000);
+  const resume=structuredClone(initialResume);resume.sectionColumns.experience='side';
+  await createResume(page,resume);
+  const period='2020.01 - 2026.10 · '+'跨部门项目协作'.repeat(10);
+  const field=page.locator('[data-node-id="experience-1-period"]');await field.fill(period);await field.press('Enter');
+  const exported=await context.newPage();
+  async function withinBounds(target:import('@playwright/test').Page){
+    await expect(target.locator('[data-node-id="experience-1-period"]')).toHaveText(period);
+    const metrics=await target.locator('[data-node-id="experience-1-period"]').evaluate(element=>{
+      const header=element.closest('.experience-header')!,paper=element.closest('.resume-paper') as HTMLElement;
+      const rect=element.getBoundingClientRect(),headerRect=header.getBoundingClientRect(),paperRect=paper.getBoundingClientRect();
+      const paperStyle=getComputedStyle(paper),scale=paperRect.width/paper.offsetWidth;
+      return {left:rect.left,right:rect.right,headerLeft:headerRect.left,headerRight:headerRect.right,contentLeft:paperRect.left+parseFloat(paperStyle.paddingLeft)*scale,contentRight:paperRect.right-parseFloat(paperStyle.paddingRight)*scale,overflow:element.scrollWidth-element.clientWidth};
+    });
+    expect(metrics.left).toBeGreaterThanOrEqual(metrics.headerLeft-1);expect(metrics.right).toBeLessThanOrEqual(metrics.headerRight+1);
+    expect(metrics.left).toBeGreaterThanOrEqual(metrics.contentLeft-1);expect(metrics.right).toBeLessThanOrEqual(metrics.contentRight+1);
+    expect(metrics.overflow).toBeLessThanOrEqual(2);
+    for(const fact of resume.experience[0].bullets)await expect(target.locator('[data-section="experience"]')).toContainText(fact);
+  }
+  for(const id of ['campus','classic','cards']){
+    const template=RESUME_TEMPLATES.find(item=>item.id===id)!;
+    await page.locator('.workspace-design').getByRole('button',{name:new RegExp(template.label)}).click();
+    const column=id==='classic'?'main':'side';
+    await expect(page.locator(`[data-column="${column}"] [data-section="experience"]`)).toHaveCount(1);
+    await withinBounds(page);await exported.setContent(await downloadedHtml(page));await withinBounds(exported);
+  }
+  await exported.close();
 });
 
 test('all exported layouts are self-contained and match preview geometry and facts',async({page,context})=>{
-  await createResume(page);const exported=await context.newPage();let external=0;
+  test.setTimeout(90000);
+  const resume=structuredClone(initialResume);resume.customSections=[{id:'export-facts',title:'附加经历',items:['NEW_TEMPLATE_EXPORT_FACT']}];
+  await createResume(page,resume);const exported=await context.newPage();let external=0;
   await exported.route('https://**',route=>{external++;return route.abort();});
   for(const {id,label} of RESUME_TEMPLATES){
     await page.locator('.workspace-design').getByRole('button',{name:new RegExp(label)}).click();const html=await downloadedHtml(page);expect(html).not.toContain('@import');expect(html).not.toContain('<button');expect(html).not.toContain('遗漏的志愿活动事实');
-    await exported.setContent(html);await expect(exported.locator('.resume-paper')).toHaveAttribute('data-template',id);await expect(exported.locator('.resume-paper')).toContainText(initialResume.education[0].school);
+    await exported.setContent(html);await expect(exported.locator('.resume-paper')).toHaveAttribute('data-template',id);
+    for(const fact of [resume.name,resume.education[0].school,resume.experience[0].company,resume.projects[0].title,resume.skills[0].label,'NEW_TEMPLATE_EXPORT_FACT'])await expect(exported.locator('.resume-paper')).toContainText(fact);
     const metric=await exported.locator('.resume-paper').evaluate(e=>({width:e.getBoundingClientRect().width,overflow:e.scrollWidth-e.clientWidth}));expect(metric.width).toBe(794);expect(metric.overflow).toBeLessThanOrEqual(2);
+    if(id==='compact')expect(await exported.locator('[data-section="experience"]').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length)).toBe(2);
+    if(id==='portfolio'){
+      expect(await exported.locator('[data-section="projects"]').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length)).toBe(2);
+      expect(await exported.locator('.resume-support-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length)).toBe(3);
+    }
+    if(id==='campus'){
+      const columns=await exported.locator('.resume-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns);
+      expect(columns.split(' ')[0]).toBe('210px');
+      expect(columns).toBe(await page.locator('.resume-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns));
+      expect(await exported.locator('.resume-side-column [data-section="education"]').count()).toBe(1);
+      expect(await exported.locator('.resume-main-column [data-section="projects"]').count()).toBe(1);
+      const side=await exported.locator('.resume-side-column').boundingBox(),main=await exported.locator('.resume-main-column').boundingBox();
+      expect(side!.x+side!.width).toBeLessThanOrEqual(main!.x);
+    }
+    if(id==='classic'){
+      expect(await exported.locator('.resume-grid').count()).toBe(0);
+      expect(await exported.locator('[data-node-id="profile-contact"]').evaluate(e=>getComputedStyle(e).gridColumnStart)).toBe('2');
+      const columns=await exported.locator('.resume-header-copy').evaluate(e=>getComputedStyle(e).gridTemplateColumns);
+      expect(columns).toBe(await page.locator('.resume-header-copy').evaluate(e=>getComputedStyle(e).gridTemplateColumns));
+      expect(await exported.locator('.section-heading').first().evaluate(e=>getComputedStyle(e,'::before').display)).not.toBe('none');
+      expect(await exported.locator('.section-heading').first().evaluate(e=>getComputedStyle(e,'::after').display)).not.toBe('none');
+    }
+    if(id==='cards'){
+      const columns=await exported.locator('.resume-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns);
+      expect(columns.split(' ').length).toBe(2);
+      expect(columns).toBe(await page.locator('.resume-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns));
+      expect(await exported.locator('.resume-grid [data-section="projects"]').count()).toBe(1);
+      expect(await exported.locator('.resume-grid [data-section="skills"]').count()).toBe(1);
+      const side=await exported.locator('.resume-side-column').boundingBox(),main=await exported.locator('.resume-main-column').boundingBox();
+      expect(main!.x+main!.width).toBeLessThanOrEqual(side!.x);
+    }
     await exported.locator('.resume-paper').screenshot({path:`.tmp/templates/${id}.png`});
     const printPadding=await exported.locator('.resume-paper').evaluate(e=>getComputedStyle(e).padding);await exported.emulateMedia({media:'print'});expect(await exported.locator('.resume-paper').evaluate(e=>getComputedStyle(e).padding)).toBe(printPadding);
     if(['minimal','editorial','academic'].includes(id))expect(await exported.locator('.section-heading').first().evaluate(e=>getComputedStyle(e,'::after').display)).not.toBe('none');
@@ -75,13 +223,18 @@ test('all exported layouts are self-contained and match preview geometry and fac
   expect(external).toBe(0);await exported.close();
 });
 
-test('explicit home template is submitted and wins over a conflicting model suggestion',async({page})=>{
+test('explicit new home template is submitted and wins over a conflicting model suggestion',async({page})=>{
   let selected='';await page.route('**/api/ai/generate',route=>{selected=route.request().postDataJSON().templateId;return route.fulfill({json:{resume:initialResume,jobTitle:'工程师',report:{summary:'',requirements:[]},warnings:[]}});});
-  await page.goto('/');await page.locator('.intake-design').getByRole('button',{name:/现代侧栏/}).click();await page.locator('.intake-card textarea').first().fill('个人经历测试');await page.locator('.intake-card textarea').nth(1).fill('岗位要求测试');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','modern');expect(selected).toBe('modern');
+  await page.goto('/');await page.locator('.intake-design').getByRole('button',{name:/作品展示/}).click();await page.locator('.intake-card textarea').first().fill('个人经历测试');await page.locator('.intake-card textarea').nth(1).fill('岗位要求测试');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','portfolio');expect(selected).toBe('portfolio');
 });
 
-test('real PDFs retain long single entries, final custom facts and all six layouts across pages',async({page,context},testInfo)=>{
-  test.setTimeout(90000);
+test('homepage can explicitly submit one of the new templates',async({page})=>{
+  let selected='';await page.route('**/api/ai/generate',route=>{selected=route.request().postDataJSON().templateId;return route.fulfill({json:{resume:initialResume,jobTitle:'工程师',report:{summary:'',requirements:[]},warnings:[]}});});
+  await page.goto('/');await expect(page.locator('.intake-design .template-option:not(.template-auto)')).toHaveCount(12);await page.locator('.intake-design').getByRole('button',{name:/校园新锐/}).click();await page.locator('.intake-card textarea').first().fill('个人经历测试');await page.locator('.intake-card textarea').nth(1).fill('岗位要求测试');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','campus');expect(selected).toBe('campus');
+});
+
+test('real PDFs retain long single entries, final custom facts and all layouts across pages',async({page,context},testInfo)=>{
+  test.setTimeout(Math.max(120000,RESUME_TEMPLATES.length*15000));
   const resume=structuredClone(initialResume);resume.projects=Array.from({length:4},(_,index)=>({id:`long-${index}`,title:`PDF_PROJECT_${index}`,meta:'2024 — 2026',stack:[],description:Array.from({length:index===0?30:12},(_,line)=>`FACT_${index}_${line}: Mixed English and 中文真实项目内容，保留学校课程与完整事实。${'Long content wraps without clipping. '.repeat(6)}`)}));resume.customSections=[{id:'final-section',title:'自定义栏目',items:['PDF_FINAL_FACT_987654321']}];
   await createResume(page,resume);const printed=await context.newPage();
   for(const {id,label} of RESUME_TEMPLATES){

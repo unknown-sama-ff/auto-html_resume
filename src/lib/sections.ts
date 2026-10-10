@@ -22,14 +22,17 @@ export function orderedSections(resume: ResumeData, includeHidden = false) {
   const template = resume.design.templateId;
   const defaults = template === 'minimal' ? ['summary', 'education', 'experience', 'projects', ...custom, 'skills', 'awards']
     : template === 'academic' ? ['summary', 'education', 'projects', 'experience', ...custom, 'skills', 'awards']
-    : template === 'timeline' ? ['summary', 'experience', 'projects', ...custom, 'skills', 'education', 'awards']
+    : template === 'timeline' || template === 'executive' ? ['summary', 'experience', 'projects', ...custom, 'skills', 'education', 'awards']
+    : template === 'compact' ? ['summary', 'experience', 'projects', 'education', 'skills', ...custom, 'awards']
+    : template === 'campus' ? ['summary', 'education', 'skills', 'awards', 'projects', 'experience', ...custom]
+    : template === 'classic' ? ['summary', 'experience', 'education', 'projects', ...custom, 'skills', 'awards']
     : ['summary', 'projects', 'experience', ...custom, 'skills', 'education', 'awards'];
   return [...new Set([...resume.sectionOrder, ...defaults])]
     .filter(id => hasSectionContent(resume, id) && (includeHidden || !resume.hiddenSections.includes(id)));
 }
 export function sectionColumn(resume: ResumeData, id: string): SectionColumn {
   const template = resume.design.templateId;
-  if (template === 'minimal' || template === 'academic') {
+  if (template === 'minimal' || template === 'academic' || template === 'compact' || template === 'classic') {
     const saved = resume.sectionColumns[id];
     return saved ? saved === 'full' ? 'full' : 'main' : id === 'summary' ? 'full' : 'main';
   }

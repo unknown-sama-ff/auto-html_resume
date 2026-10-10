@@ -1,4 +1,4 @@
-export const TEMPLATE_IDS = ['minimal', 'technical', 'editorial', 'academic', 'timeline', 'modern'] as const;
+export const TEMPLATE_IDS = ['minimal', 'technical', 'editorial', 'academic', 'timeline', 'modern', 'executive', 'compact', 'portfolio', 'campus', 'classic', 'cards'] as const;
 export type TemplateId = typeof TEMPLATE_IDS[number];
 export const FONT_IDS = ['sans', 'serif', 'mono', 'yahei', 'heiti', 'simsun', 'kaiti', 'fangsong', 'arial'] as const;
 export type FontId = typeof FONT_IDS[number];
@@ -12,6 +12,12 @@ export const RESUME_TEMPLATES = [
   { id: 'academic', label: '学术研究', description: '居中页眉 · 教育研究优先', design: { accentColor: '#304D64', inkColor: '#283543', paperColor: '#FFFFFF', sectionGap: 20, fontFamily: 'serif', density: 'compact', headingStyle: 'line' } },
   { id: 'timeline', label: '时间线叙事', description: '经历脉络 · 右侧能力面板', design: { accentColor: '#956847', inkColor: '#3C352D', paperColor: '#FFFCF6', sectionGap: 22, fontFamily: 'sans', density: 'comfortable', headingStyle: 'plain' } },
   { id: 'modern', label: '现代侧栏', description: '全高身份栏 · 独立项目模块', design: { accentColor: '#66568C', inkColor: '#322F43', paperColor: '#FFFFFF', sectionGap: 22, fontFamily: 'sans', density: 'comfortable', headingStyle: 'accent' } },
+  { id: 'executive', label: '商务专业', description: '经历优先 · 右侧资历索引', design: { accentColor: '#216654', inkColor: '#263A34', paperColor: '#FFFFFF', sectionGap: 20, fontFamily: 'sans', density: 'comfortable', headingStyle: 'line' } },
+  { id: 'compact', label: '紧凑单栏', description: '栏目标签栏 · 高效呈现信息', design: { accentColor: '#535A62', inkColor: '#292D32', paperColor: '#FFFFFF', sectionGap: 12, fontFamily: 'sans', density: 'compact', headingStyle: 'plain' } },
+  { id: 'portfolio', label: '作品展示', description: '双列项目 · 底部能力索引', design: { accentColor: '#B83659', inkColor: '#372C31', paperColor: '#FFFFFF', sectionGap: 24, fontFamily: 'sans', density: 'comfortable', headingStyle: 'accent' } },
+  { id: 'campus', label: '校园新锐', description: '教育能力左栏 · 项目实践优先', design: { accentColor: '#3569B3', inkColor: '#243551', paperColor: '#FFFFFF', sectionGap: 20, fontFamily: 'sans', density: 'comfortable', headingStyle: 'accent' } },
+  { id: 'classic', label: '经典履历', description: '衬线单栏 · 正式履历排版', design: { accentColor: '#4B4652', inkColor: '#2D2C31', paperColor: '#FFFFFF', sectionGap: 22, fontFamily: 'serif', density: 'comfortable', headingStyle: 'line' } },
+  { id: 'cards', label: '信息卡片', description: '均衡双栏 · 分区快速阅读', design: { accentColor: '#147B82', inkColor: '#253B40', paperColor: '#FFFFFF', sectionGap: 18, fontFamily: 'sans', density: 'comfortable', headingStyle: 'plain' } },
 ] as const;
 
 export function templateById(id: TemplateId) { return RESUME_TEMPLATES.find(template => template.id === id)!; }

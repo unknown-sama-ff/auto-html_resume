@@ -121,10 +121,15 @@ test('AI settings expose exactly the author preset and custom URL, even with old
   await expect(dialog.locator('.model-mode-tabs button')).toHaveText(['作者预设6.1-sol','自定义URL']);
   await expect(dialog.locator('.preset-item')).toHaveCount(0);
   await expect(dialog).not.toContainText('DeepSeek');await expect(dialog).not.toContainText('READY');
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('high');
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toBeDisabled();
+  await expect(dialog).toContainText('作者预设固定为 high');
   await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
   await expect(dialog.getByLabel('完整 URL',{exact:false})).toBeVisible();
   await expect(dialog.getByLabel('模型名称',{exact:true})).toBeVisible();
   await expect(dialog.getByLabel('API Key',{exact:false})).toBeVisible();
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toBeEnabled();
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('none');
 });
 
 test('custom URL fields survive mode toggles; cancel leaves the author default active',async({page})=>{
@@ -136,10 +141,14 @@ test('custom URL fields survive mode toggles; cancel leaves the author default a
   await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1');
   await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');
   await dialog.getByLabel('API Key',{exact:false}).fill('test-key');
+  await dialog.getByLabel('思考强度', { exact: true }).selectOption('low');
   await dialog.getByRole('button',{name:'作者预设6.1-sol',exact:true}).click();
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('high');
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toBeDisabled();
   await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
   await expect(dialog.getByLabel('完整 URL',{exact:false})).toHaveValue('https://api.example.com/v1');
   await expect(dialog.getByLabel('API Key',{exact:false})).toHaveValue('test-key');
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('low');
   await dialog.getByRole('button',{name:'取消',exact:true}).click();
   await page.locator('.intake-card textarea').nth(0).fill('姓名：张雨');await page.locator('.intake-card textarea').nth(1).fill('岗位：数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');expect(received.mode).toBe('preset');expect(received.presetId).toBe('cf-api-fan');expect(received).not.toHaveProperty('apiKey');
@@ -152,6 +161,7 @@ test('custom generation and editing go directly to the user endpoint without sen
   await page.route('https://api.example.com/v1/chat/completions',route=>{
     if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'POST, OPTIONS','access-control-allow-headers':'Authorization, Content-Type'}});
     calls++;const payload=route.request().postDataJSON();requestModel=payload.model;authorization=route.request().headers().authorization;profile=JSON.stringify(payload.messages);
+    expect(payload.reasoning_effort).toBe('high');
     const system=payload.messages.find((message:{role:string})=>message.role==='system').content;
     const content=system.includes('岗位正文改写阶段')?makeTargetedPatch():calls===1?makeResult():{id:'direct-edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'更新姓名色彩',preview:'姓名改为深蓝色',requiresConfirmation:false};
     if(system.includes('岗位正文改写阶段')){expect(calls).toBe(2);const input=JSON.parse(payload.messages.find((message:{role:string})=>message.role==='user').content);expect(input.profileText).toBe('姓名：张雨');expect(input.jobText).toBe('岗位：数据分析师');expect(input.draft).toBeTruthy();}
@@ -160,9 +170,17 @@ test('custom generation and editing go directly to the user endpoint without sen
   await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'AI 模型设置'});await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'保存模型选择'})).toBeDisabled();
+  await dialog.getByLabel('思考强度', { exact: true }).selectOption('high');
   await dialog.getByLabel('完整 URL',{exact:false}).fill('https://api.example.com/v1');await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');await dialog.getByLabel('API Key',{exact:false}).fill('test-custom-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
   await page.locator('.intake-card textarea').nth(0).fill('姓名：张雨');await page.locator('.intake-card textarea').nth(1).fill('岗位：数据分析师');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');await expect(page.locator('.resume-paper')).toContainText(tailoredSummary);expect(calls).toBe(2);expect(requestModel).toBe('custom-test-model');expect(authorization).toBe('Bearer test-custom-key');expect(profile).toContain('张雨');expect(serverCalls).toBe(0);
+  await page.getByRole('button', { name: 'AI 模型', exact: true }).click();
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('high');
+  await dialog.getByLabel('思考强度', { exact: true }).selectOption('low');
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await page.getByRole('button', { name: 'AI 模型', exact: true }).click();
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('high');
+  await dialog.getByRole('button', { name: '关闭模型设置' }).click();
   await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('把姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('姓名改为深蓝色');await page.getByRole('button',{name:'应用修改'}).click();await expect(page.locator('.resume-paper h1')).toHaveCSS('color','rgb(49, 90, 100)');expect(calls).toBe(3);expect(serverCalls).toBe(0);
   await expect(page.locator('.save-state')).toHaveText('已本地保存');
   const saved=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{const request=indexedDB.open('folio-atelier',1);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result;const read=db.transaction('workspace','readonly').objectStore('workspace').get('resume-editor-state');read.onsuccess=()=>{resolve(JSON.stringify(read.result));db.close();};read.onerror=()=>{reject(read.error);db.close();};};}));
@@ -296,12 +314,12 @@ test('custom Responses generation and edit stay browser-direct and use the prope
   await page.route('**/api/ai/edit',route=>{backendRequests++;return route.fulfill({status:400,json:{error:'must stay browser-direct'}});});
   await page.route('https://responses.example/v1/responses',route=>{
     if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'POST, OPTIONS','access-control-allow-headers':'Authorization, Content-Type'}});
-    const payload=route.request().postDataJSON();expect(payload.store).toBe(false);expect(payload.stream).toBe(false);expect(payload.input[0].content[0].type).toBe('input_text');expect(payload).not.toHaveProperty('messages');calls++;
+    const payload=route.request().postDataJSON();expect(payload.store).toBe(false);expect(payload.stream).toBe(false);expect(payload.input[0].content[0].type).toBe('input_text');expect(payload).not.toHaveProperty('messages');expect(payload.reasoning).toEqual({effort:'xhigh'});calls++;
     const content=payload.instructions.includes('岗位正文改写阶段')?makeTargetedPatch():calls===1?makeResult():{targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'调整色彩',preview:'深蓝色建议',requiresConfirmation:false};
     if(payload.instructions.includes('岗位正文改写阶段')){expect(calls).toBe(2);const input=JSON.parse(payload.input[0].content[0].text);expect(input.profileText).toBe('测试个人资料张雨');expect(input.jobText).toBe('测试岗位要求');expect(input.draft).toBeTruthy();}
     return route.fulfill({headers:{'access-control-allow-origin':'*'},json:{status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(content)}]}]}});
   });
-  await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();const dialog=page.getByRole('dialog',{name:'AI 模型设置'});await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();await dialog.getByLabel('完整 URL',{exact:false}).fill('https://responses.example/v1/responses');await dialog.getByLabel('模型名称',{exact:true}).fill('test-model');await dialog.getByLabel('API Key',{exact:false}).fill('fake-test-key');await dialog.getByRole('button',{name:'保存模型选择'}).click();
+  await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();const dialog=page.getByRole('dialog',{name:'AI 模型设置'});await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();await dialog.getByLabel('完整 URL',{exact:false}).fill('https://responses.example/v1/responses');await dialog.getByLabel('模型名称',{exact:true}).fill('test-model');await dialog.getByLabel('API Key',{exact:false}).fill('fake-test-key');await dialog.getByLabel('思考强度',{exact:true}).selectOption('xhigh');await dialog.getByRole('button',{name:'保存模型选择'}).click();
   await page.locator('.intake-card textarea').first().fill('测试个人资料张雨');await page.locator('.intake-card textarea').nth(1).fill('测试岗位要求');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');await expect(page.locator('.resume-paper')).toContainText(tailoredSummary);expect(calls).toBe(2);
   await page.locator('.resume-paper h1').click();await page.getByRole('textbox',{name:'AI修改要求'}).fill('姓名改为深蓝色');await page.getByRole('button',{name:'生成修改',exact:true}).click();await expect(page.locator('.patch-card')).toContainText('深蓝色建议');expect(calls).toBe(3);expect(backendRequests).toBe(0);
 });

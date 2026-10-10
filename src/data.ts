@@ -1,5 +1,5 @@
 import type { ResumeData, ModelPreset } from './types';
-import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL, AUTHOR_MODEL, AUTHOR_BASE_URL } from '../shared/modelOptions';
+import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL, AUTHOR_MODEL, AUTHOR_BASE_URL, AUTHOR_REASONING_EFFORT } from '../shared/modelOptions';
 import { templateDesign } from '../shared/design';
 
 export const DEFAULT_NODE_STYLE = {
@@ -76,5 +76,6 @@ export const fallbackPresets: ModelPreset[] = [{
   provider: 'OpenAI-compatible relay',
   model: AUTHOR_MODEL,
   baseUrl: AUTHOR_BASE_URL,
+  reasoningEffort: AUTHOR_REASONING_EFFORT,
   description: '由作者后端配置，无需填写API Key。',
 }];

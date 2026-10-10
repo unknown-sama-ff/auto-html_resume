@@ -1,6 +1,10 @@
-import { Check, Settings2, ShieldCheck, X } from 'lucide-react';
-import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL, CUSTOM_URL_LABEL, AUTHOR_MODEL } from '../../shared/modelOptions';
+import { Check, LockKeyhole, Settings2, ShieldCheck, X } from 'lucide-react';
+import { AUTHOR_PRESET_ID, AUTHOR_PRESET_LABEL, CUSTOM_URL_LABEL, AUTHOR_MODEL, AUTHOR_REASONING_EFFORT } from '../../shared/modelOptions';
+import { REASONING_EFFORTS } from '../../shared/errorDiagnostics';
+import { parseReasoningEffort } from '../../shared/modelProtocol';
 import type { ModelConfig, ModelPreset } from '../types';
+
+const reasoningLabels = { none: '通道默认', minimal: '最少（minimal）', low: '低（low）', medium: '中（medium）', high: '高（high）', xhigh: '最高（xhigh）' };
 
 export function ModelSettings({ config, presets, onChange, onClose, onSave }: {
   config: ModelConfig; presets: ModelPreset[]; onChange: (config: ModelConfig) => void;
@@ -53,6 +57,15 @@ export function ModelSettings({ config, presets, onChange, onClose, onSave }: {
         </div>
         {!canSave && <p className="code-safe">请填写有效的HTTP(S)地址和模型名称。</p>}
       </div>}
+      <div className="model-reasoning">
+        <label htmlFor="model-reasoning">思考强度</label>
+        <select id="model-reasoning" value={isAuthor ? AUTHOR_REASONING_EFFORT : config.reasoningEffort ?? 'none'}
+          disabled={isAuthor} aria-describedby="model-reasoning-note"
+          onChange={event => onChange({ ...config, reasoningEffort: parseReasoningEffort(event.target.value) })}>
+          {REASONING_EFFORTS.map(effort => <option key={effort} value={effort}>{reasoningLabels[effort]}</option>)}
+        </select>
+        <p id="model-reasoning-note">{isAuthor ? <><LockKeyhole size={13}/>作者预设固定为 high</> : '通道默认由模型服务决定；指定强度须由所选模型支持。'}</p>
+      </div>
       <div className="modal-foot">
         <button className="ghost-button" onClick={onClose}>取消</button>
         <button className="apply-button" disabled={!canSave} onClick={onSave}><Check size={14}/>保存模型选择</button>

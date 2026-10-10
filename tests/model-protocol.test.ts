@@ -49,9 +49,16 @@ test('400 diagnostics whitelist hints without returning upstream private content
 });
 
 test('reasoning effort is added only when configured and follows each protocol',()=>{
-  const chat=buildModelRequest('gpt-6.1-sol',messages,'chat_completions','medium');assert.equal(chat.reasoning_effort,'medium');assert.equal(chat.stream,false);
-  const none=buildModelRequest('gpt-6.1-sol',messages,'chat_completions','none');assert.ok(!('reasoning_effort' in none));
-  const responses=buildModelRequest('gpt-6.1-sol',messages,'responses','medium');assert.deepEqual(responses.reasoning,{effort:'medium'});assert.equal(responses.store,false);
+  for(const effort of ['minimal','low','medium','high','xhigh'] as const){
+    const chat=buildModelRequest('gpt-6.1-sol',messages,'chat_completions',effort);assert.equal(chat.reasoning_effort,effort);assert.equal(chat.stream,false);assert.ok(!('reasoning' in chat));
+    const responses=buildModelRequest('gpt-6.1-sol',messages,'responses',effort);assert.deepEqual(responses.reasoning,{effort});assert.equal(responses.store,false);assert.ok(!('reasoning_effort' in responses));
+  }
+  for(const effort of [undefined,'none'] as const){
+    for(const protocol of ['chat_completions','responses'] as const){
+      const request=buildModelRequest('gpt-6.1-sol',messages,protocol,effort);
+      assert.ok(!('reasoning_effort' in request));assert.ok(!('reasoning' in request));
+    }
+  }
 });
 
 test('unsupported non-streaming feature is not mistaken for a missing model id',()=>{

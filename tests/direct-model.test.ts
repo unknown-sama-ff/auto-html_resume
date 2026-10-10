@@ -28,21 +28,22 @@ test('direct endpoint normalization preserves full endpoints and rejects unsafe/
   assert.throws(()=>normalizeDirectUrl('http://provider.example/v1','https:'));
 });
 
-test('custom generation and editing bypass app APIs with no cookies or redirects',async t=>{
+test('custom Chat generation and editing share selected reasoning with no cookies or redirects',async t=>{
   const requests:{url:string;body:string}[]=[];
   t.mock.method(globalThis,'fetch',async (input:string,init:RequestInit)=>{
     assert.equal(input,'https://provider.example/v1/chat/completions');assert.equal(init.credentials,'omit');assert.equal(init.redirect,'error');assert.equal(init.referrerPolicy,'no-referrer');
     assert.equal((init.headers as Record<string,string>).Authorization,'Bearer test-user-key');
-    const body=String(init.body);requests.push({url:input,body});assert.equal(JSON.parse(body).model,'own-model');assert.ok(!body.includes('test-user-key'));
+    const body=String(init.body);requests.push({url:input,body});assert.equal(JSON.parse(body).model,'own-model');assert.equal(JSON.parse(body).reasoning_effort,'medium');assert.ok(!body.includes('test-user-key'));
     if(requests.length===2){assert.match(JSON.parse(body).messages[0].content,/岗位正文改写阶段/);assert.match(body,/测试岗位/);}
     const content=requests.length===1?generation:requests.length===2?tailoringPatch:{id:'edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',preview:'修改姓名颜色',reason:'用户要求',requiresConfirmation:false};
     return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(content)}}]}),{status:200});
   });
-  const result=await requestGeneration(config,'姓名：测试','测试岗位',[],[]);
+  const customConfig={...config,reasoningEffort:'medium' as const};
+  const result=await requestGeneration(customConfig,'姓名：测试','测试岗位',[],[]);
   assert.equal(result.resume.name,initialResume.name);assert.equal(result.resume.summary,tailoredSummary);
   assert.deepEqual(result.resume.projects[0].description,tailoringPatch.projects[0].description);
   assert.deepEqual(result.resume.experience[0].bullets,tailoringPatch.experience[0].bullets);
-  const patch=await requestAIEdit(config,'改颜色',getNodeMeta(initialResume,'profile-name'));
+  const patch=await requestAIEdit(customConfig,'改颜色',getNodeMeta(initialResume,'profile-name'));
   assert.equal(patch.value,'#315A64');assert.equal(requests.length,3);
 });
 
@@ -66,24 +67,73 @@ test('custom generation reports second-stage failure instead of returning its fi
   await assert.rejects(requestGeneration(config,'姓名：测试','测试岗位',[],[]),/限流|额度/);assert.equal(calls,2);
 });
 
-test('author requests send neither custom URL nor user Key to backend',async t=>{
+test('author requests send no custom URL, user Key or client reasoning setting to backend',async t=>{
   t.mock.method(globalThis,'fetch',async(input:string,init:RequestInit)=>{
-    assert.equal(input,'/api/ai/generate');assert.deepEqual(JSON.parse(String(init.body)).config,{mode:'preset',presetId:'cf-api-fan'});
-    return new Response(JSON.stringify(generation),{status:200});
+    assert.ok(input==='/api/ai/generate'||input==='/api/ai/edit');assert.deepEqual(JSON.parse(String(init.body)).config,{mode:'preset',presetId:'cf-api-fan'});
+    const payload=input==='/api/ai/generate'?generation:{patch:{id:'edit',targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'测试',preview:'改为深蓝色',requiresConfirmation:false}};
+    return new Response(JSON.stringify(payload),{status:200});
   });
-  await requestGeneration({...config,mode:'preset'},'姓名：测试','测试岗位',[],[]);
+  const authorConfig={...config,mode:'preset' as const,reasoningEffort:'low' as const};
+  await requestGeneration(authorConfig,'姓名：测试','测试岗位',[],[]);
+  await requestAIEdit(authorConfig,'改颜色',getNodeMeta(initialResume,'profile-name'));
 });
 
-test('custom Responses URL goes directly to provider with input/store=false and extracts its final text',async t=>{
+test('custom Responses generation and editing share selected reasoning with input/store=false',async t=>{
   let count=0;t.mock.method(globalThis,'fetch',async(input:string,init:RequestInit)=>{
-    assert.equal(input,'https://provider.example/v1/responses');const request=JSON.parse(String(init.body));assert.equal(request.model,'own-model');assert.equal(request.store,false);assert.equal(request.stream,false);assert.ok(Array.isArray(request.input));assert.ok(!('messages' in request));count++;
+    assert.equal(input,'https://provider.example/v1/responses');const request=JSON.parse(String(init.body));assert.equal(request.model,'own-model');assert.equal(request.store,false);assert.equal(request.stream,false);assert.deepEqual(request.reasoning,{effort:'xhigh'});assert.ok(Array.isArray(request.input));assert.ok(!('messages' in request));count++;
     if(count===2)assert.match(String(request.instructions),/岗位正文改写阶段/);
     const content=count===1?generation:count===2?tailoringPatch:{targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'测试',preview:'改为深蓝色',requiresConfirmation:false};
     return new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(content)}]}]}),{status:200});
   });
-  const responsesConfig={...config,url:'https://provider.example/v1/responses'};
+  const responsesConfig={...config,url:'https://provider.example/v1/responses',reasoningEffort:'xhigh' as const};
   const result=await requestGeneration(responsesConfig,'测试资料','测试岗位',[],[]);assert.equal(result.resume.name,initialResume.name);assert.equal(result.resume.summary,tailoredSummary);
   const edit=await requestAIEdit(responsesConfig,'改颜色',getNodeMeta(initialResume,'profile-name'));assert.equal(edit.value,'#315A64');assert.equal(count,3);
+});
+
+test('custom channel default leaves reasoning parameters absent for either protocol',async t=>{
+  const requests:Record<string,unknown>[]=[];
+  t.mock.method(globalThis,'fetch',async(input:string,init:RequestInit)=>{
+    const request=JSON.parse(String(init.body));requests.push(request);
+    assert.ok(!('reasoning_effort' in request));assert.ok(!('reasoning' in request));
+    const payload=input.endsWith('/responses')?{output_text:'test answer'}:{choices:[{message:{content:'test answer'}}]};
+    return new Response(JSON.stringify(payload),{status:200});
+  });
+  for(const url of [config.url,'https://provider.example/v1/responses']){
+    for(const reasoningEffort of [undefined,'none'] as const){
+      assert.equal(await requestDirectModel({...config,url,reasoningEffort},[{role:'user',content:'test'}]),'test answer');
+    }
+  }
+  assert.equal(requests.length,4);
+});
+
+test('every custom reasoning level is forwarded using the selected protocol field',async t=>{
+  let calls=0;
+  const requests:{url:string;body:Record<string,unknown>}[]=[];
+  t.mock.method(globalThis,'fetch',async(input:string,init:RequestInit)=>{
+    calls++;requests.push({url:input,body:JSON.parse(String(init.body))});
+    const payload=input.endsWith('/responses')?{output_text:'test answer'}:{choices:[{message:{content:'test answer'}}]};
+    return new Response(JSON.stringify(payload),{status:200});
+  });
+  for(const reasoningEffort of ['minimal','low','medium','high','xhigh'] as const){
+    for(const responses of [false,true]){
+      await requestDirectModel({...config,url:responses?'https://provider.example/v1/responses':config.url,reasoningEffort},[{role:'user',content:'test'}]);
+      const request=requests.at(-1);assert.ok(request);
+      if(responses){assert.deepEqual(request.body.reasoning,{effort:reasoningEffort});assert.ok(!('reasoning_effort' in request.body));}
+      else{assert.equal(request.body.reasoning_effort,reasoningEffort);assert.ok(!('reasoning' in request.body));}
+    }
+  }
+  assert.equal(calls,10);
+});
+
+test('invalid custom reasoning is rejected before direct generation or edit performs a fetch',async t=>{
+  let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response('{}');});
+  for(const value of ['typo','HIGH',''] as const){
+    const invalid={...config,reasoningEffort:value as never};
+    await assert.rejects(requestDirectModel(invalid,[{role:'user',content:'test'}]),/思考强度只支持/);
+    await assert.rejects(requestGeneration(invalid,'姓名：测试','测试岗位',[],[]),/reasoningEffort/);
+    await assert.rejects(requestAIEdit(invalid,'改颜色',getNodeMeta(initialResume,'profile-name')),/思考强度只支持/);
+  }
+  assert.equal(calls,0);
 });
 
 test('direct timeout uses the same budget, aborts once and never forwards to our backend',async t=>{

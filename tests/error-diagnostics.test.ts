@@ -44,8 +44,8 @@ test('reasoning rejection is not mislabeled as model unavailable',()=>{
   assert.equal(describeBadRequest({error:{code:'model_not_found',param:'model'}}).diagnostic,'model_unavailable');
 });
 
-test('invalid reasoning environment value is caught locally and metadata does not expose a Key-shaped model',()=>{
-  assert.throws(()=>parseReasoningEffort('typo'),/CF_API_REASONING_EFFORT/);assert.equal(parseReasoningEffort('none'),'none');
+test('invalid reasoning setting is caught locally and metadata does not expose a Key-shaped model',()=>{
+  assert.throws(()=>parseReasoningEffort('typo'),/思考强度只支持/);assert.equal(parseReasoningEffort('none'),'none');
   assert.equal(safeModelLabel('sk-do-not-display'),undefined);assert.equal(safeModelLabel('same-secret','same-secret'),undefined);
   assert.equal(safeBuildVersion('not a revision'),'unknown');
 });

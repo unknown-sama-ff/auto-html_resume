@@ -14,7 +14,7 @@ export function applyTemplate(resume: ResumeData, id: TemplateId): ResumeData {
 export function getBaseNodeStyle(resume: ResumeData, id: string): Required<NodeStyle> {
   const design = resume.design;
   const heading = id.endsWith('-section-title') || /^custom-.*-title$/.test(id);
-  const nameSize = { minimal: 38, technical: 34, editorial: 48, academic: 34, timeline: 38, modern: 42 }[design.templateId];
+  const nameSize = { minimal: 38, technical: 34, editorial: 48, academic: 34, timeline: 38, modern: 42, executive: 40, compact: 30, portfolio: 42, campus: 38, classic: 42, cards: 36 }[design.templateId];
   const small = /^profile-(contact|location|email|phone|website)$/.test(id) || /^project-\d+-(meta|stack)$/.test(id) || /-(period|level)$/.test(id);
   const bold = /^experience-\d+-role$/.test(id) || /^education-\d+-school$/.test(id);
   return {

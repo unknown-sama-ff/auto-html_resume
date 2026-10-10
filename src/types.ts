@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { resumeSchema, nodeStyleSchema, reportSchema, generationSchema, materialSchema } from '../shared/contracts';
+import type { ReasoningEffort } from '../shared/modelProtocol';
 export type ResumeData = z.infer<typeof resumeSchema>;
 export type NodeStyle = z.infer<typeof nodeStyleSchema>;
 export type Project = ResumeData['projects'][number];
@@ -19,5 +20,5 @@ export type ResumeVersion = {
 };
 export type WorkspaceState = { schemaVersion: 2; versions: ResumeVersion[]; activeVersionId: string | null };
 export type ModelMode = 'preset' | 'custom';
-export type ModelConfig = { mode: ModelMode; presetId: string; url: string; apiKey: string; model: string };
-export type ModelPreset = { id: string; label: string; provider: string; model: string; baseUrl: string; description: string };
+export type ModelConfig = { mode: ModelMode; presetId: string; url: string; apiKey: string; model: string; reasoningEffort?: ReasoningEffort };
+export type ModelPreset = { id: string; label: string; provider: string; model: string; baseUrl: string; description: string; reasoningEffort?: ReasoningEffort };
