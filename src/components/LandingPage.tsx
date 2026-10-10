@@ -10,11 +10,13 @@ type Props = {
   onPhoto:(file:File)=>void;photo:string;busy:boolean;reading:boolean;photoBusy:boolean;error:string;consent:boolean;onConsent:(value:boolean)=>void;
   onStart:()=>void;onDemo:()=>void;onModels:()=>void;onOpenSidebar:()=>void;versionCount:number;sidebarExpanded:boolean;
   templateId:TemplateId|'auto';onTemplate:(id:TemplateId|'auto')=>void;
+  sourceVersionTitle?:string;sourceProfileReady?:boolean;
 };
 export function LandingPage(p:Props){
   const ready=Boolean((p.profileText.trim()||p.profileMaterial?.text||p.profileMaterial?.image) && (p.jobText.trim()||p.jobMaterial?.text||p.jobMaterial?.image));
   return <div className="landing-shell"><header className="landing-topbar"><div className="brand-lockup landing-brand"><div className="brand-mark" aria-hidden="true">e</div><div><strong>easy 简历</strong><span>AI RESUME STUDIO</span></div></div><div className="landing-header-actions"><AuthorLinks/><SponsorButton/><span className="landing-topnote"><ShieldCheck size={14}/>本地保存 · 按需AI处理</span><button className="outline-button" onClick={p.onModels}><Settings2 size={15}/> AI 模型</button><button className="outline-button home-versions-button" aria-label="打开版本侧边栏" aria-expanded={p.sidebarExpanded} aria-controls="sidebar-versions" onClick={p.onOpenSidebar}><LayoutTemplate size={15}/>我的简历 <span className="home-version-count">{p.versionCount}</span></button></div></header>
   <main className="landing-main"><section className="landing-hero"><div className="eyebrow-ui"><Sparkles size={14}/> 免费简历工具 · AI简历生成</div><h1>一份经历，<br/><em>不同岗位的答案。</em></h1><p>「easy 简历」是一款免费的在线简历工具。上传个人资料和岗位要求，用AI一键生成简历：从真实资料中找到相关经历，改写个人简介、项目和工作描述，并调整技能重点。每个岗位拥有独立版本；生成后可核对依据、继续编辑，最后下载HTML或打印为PDF。</p><div className="landing-hero-meta"><span>01 · 提供个人资料</span><span>02 · 提供岗位要求</span><span>03 · AI生成并继续编辑</span></div></section>
+  {p.sourceVersionTitle&&<div className="landing-source-note" role="status"><Sparkles size={14}/><span>基于「{p.sourceVersionTitle}」创建新岗位版本{p.sourceProfileReady?'，个人资料已带入。':'，请重新上传或补充个人资料。'}</span></div>}
   <section className="intake-grid">{(['profile','job'] as const).map(kind=>{
     const profile=kind==='profile';const material=profile?p.profileMaterial:p.jobMaterial;
     return <div className={`intake-card ${!profile?'job-intake':''}`} key={kind}><div className="intake-card-head"><span className="intake-number">{profile?'01':'02'}</span><div><strong>{profile?'你的个人资料':'你的目标岗位'}</strong><small>{profile?'学校、课程、项目、实习、获奖、技能与作品链接':'岗位职责、必备技能、经验要求与招聘截图'}</small></div></div>

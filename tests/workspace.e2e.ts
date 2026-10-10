@@ -211,6 +211,44 @@ test('home opens the saved-version sidebar directly without a separate continue-
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
 });
 
+test('saved version seeds a new role resume after reload while keeping versions independent',async({page})=>{
+  const profile='姓名：张雨\n技能：Python、SQL\n项目：电商数据分析';
+  const jobs=['岗位：数据分析师，要求Python和SQL','岗位：产品经理，要求需求分析和项目协作'];
+  const requests: { profileText:string; jobText:string }[]=[];
+  let call=0;
+  await page.route('**/api/ai/generate',route=>{
+    const input=route.request().postDataJSON() as { profileText:string; jobText:string };
+    requests.push({profileText:input.profileText,jobText:input.jobText});
+    call+=1;
+    return route.fulfill({json:makeResult('张雨',call===1?'数据分析师':'产品经理')});
+  });
+  await page.goto('/');
+  await page.locator('.intake-card textarea').nth(0).fill(profile);
+  await page.locator('.intake-card textarea').nth(1).fill(jobs[0]);
+  await page.locator('.consent-line input').check();
+  await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  const firstId=await page.locator('.version-select').inputValue();
+
+  await page.reload();
+  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.locator(`.version-item[data-version-id="${firstId}"]`).click();
+  await page.getByRole('button',{name:'基于当前版本创建岗位简历',exact:true}).click();
+  await expect(page.locator('.landing-source-note')).toContainText('个人资料已带入');
+  await expect(page.locator('.intake-card textarea').nth(0)).toHaveValue(profile);
+  await expect(page.locator('.intake-card textarea').nth(1)).toHaveValue('');
+  await expect(page.locator('.consent-line input')).not.toBeChecked();
+
+  await page.locator('.intake-card textarea').nth(1).fill(jobs[1]);
+  await page.locator('.consent-line input').check();
+  await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  await expect(page.locator('.version-select option')).toHaveCount(2);
+  await expect(page.locator('.document-heading')).toContainText('产品经理');
+  expect(requests).toEqual([{profileText:profile,jobText:jobs[0]},{profileText:profile,jobText:jobs[1]}]);
+  await page.locator('.version-select').selectOption(firstId);
+  await expect(page.locator('.document-heading')).toContainText('数据分析师');
+});
+
 test('version deletion requires confirmation, keeps other versions, and persists after reload',async({page})=>{
   await page.goto('/');await generate(page);
   const originalId=await page.locator('.version-select').inputValue();

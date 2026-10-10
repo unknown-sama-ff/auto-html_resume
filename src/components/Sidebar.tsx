@@ -4,10 +4,11 @@ type SidebarView = 'home' | 'workspace' | 'match' | 'history';
 type Props = {
   view: SidebarView; collapsed: boolean; versions: ResumeVersion[]; activeVersionId: string | null; busy: boolean;
   onToggle: () => void; onNavigate: (view: SidebarView) => void; onSelect: (id: string) => void;
-  onDelete: (id: string) => void; onBackup: () => void;
+  onDelete: (id: string) => void; onBackup: () => void; onStartNewVersion?: () => void;
 };
 export function Sidebar(p: Props) {
   const hasActive = p.versions.some(version => version.id === p.activeVersionId);
+  const startNewVersion = () => p.onStartNewVersion ? p.onStartNewVersion() : p.onNavigate('home');
   const links = [
     { id: 'home', label: '工具介绍 / 新建简历', Icon: Home },
     { id: 'workspace', label: '简历工作台', Icon: LayoutTemplate },
@@ -22,7 +23,7 @@ export function Sidebar(p: Props) {
     <div className="rail-caption">RESUME STUDIO</div>
     <nav className="rail-nav" aria-label="工作台导航">{links.map(link => <button key={link.id} className={`rail-nav-item ${p.view === link.id ? 'active' : ''}`} aria-label={link.label} title={link.label} disabled={p.busy || (!hasActive && link.id !== 'home')} onClick={() => p.onNavigate(link.id)}><link.Icon size={16}/><span>{link.label}</span></button>)}</nav>
     <div className="version-block" id="sidebar-versions">
-      <div className="section-label-row"><span>我的简历 · {p.versions.length}</span><button aria-label="新建岗位简历" className="quiet-icon" disabled={p.busy} onClick={() => p.onNavigate('home')}><Plus size={15}/></button></div>
+      <div className="section-label-row"><span>我的简历 · {p.versions.length}</span><button aria-label="新建岗位简历" className="quiet-icon" disabled={p.busy} onClick={startNewVersion}><Plus size={15}/></button></div>
       <div className="version-list">{p.versions.map(version => <div className={`version-row ${p.activeVersionId === version.id ? 'is-active' : ''}`} data-version-id={version.id} key={version.id}>
         <button data-version-id={version.id} className={`version-item ${p.activeVersionId === version.id ? 'active' : ''}`} title={version.title} disabled={p.busy} aria-pressed={p.activeVersionId === version.id} onClick={() => p.onSelect(version.id)}><span className="version-dot" style={{ background: version.accent }}/><span className="version-copy"><strong>{version.title}</strong><small>{version.isDemo ? '示例 · ' : ''}{new Date(version.updatedAt).toLocaleDateString('zh-CN')}</small></span></button>
         <button className="version-delete" aria-label={`删除版本：${version.title}`} title={`删除版本：${version.title}`} disabled={p.busy} onClick={() => p.onDelete(version.id)}><Trash2 size={14}/></button>

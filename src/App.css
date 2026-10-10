@@ -436,6 +436,8 @@ textarea { resize: vertical; }
 .landing-hero p { max-width: 390px; margin: 0; color: #77827b; font-size: 12px; line-height: 1.85; }
 .landing-hero-meta { display: flex; flex-wrap: wrap; gap: 9px 18px; margin-top: 31px; color: #8c958d; font-size: 9px; letter-spacing: .06em; }
 .landing-hero-meta span::first-letter { color: var(--accent); }
+.landing-source-note { display: inline-flex; align-items: center; gap: 7px; margin-top: 24px; padding: 9px 12px; border-left: 2px solid var(--accent); background: #fff8ef; color: #6d766e; font-size: 10px; line-height: 1.5; }
+.landing-source-note svg { flex: 0 0 auto; color: var(--accent); }
 .intake-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 58px; }
 .intake-card { padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.45); box-shadow: 0 16px 40px rgba(58, 51, 40, .045); }
 .job-intake { background: #eef0e7; }
