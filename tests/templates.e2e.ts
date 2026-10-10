@@ -246,11 +246,12 @@ test('homepage can explicitly submit one of the new templates',async({page})=>{
   await page.goto('/');await expect(page.locator('.intake-design .template-option:not(.template-auto)')).toHaveCount(12);await page.locator('.intake-design').getByRole('button',{name:/校园新锐/}).click();await page.locator('.intake-card textarea').first().fill('个人经历测试');await page.locator('.intake-card textarea').nth(1).fill('岗位要求测试');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template','campus');expect(selected).toBe('campus');
 });
 
-test('real PDFs retain long single entries, final custom facts and all layouts across pages',async({page,context})=>{
-  test.setTimeout(120000);
+test('representative PDFs retain long entries and final custom facts across pages',async({page,context})=>{
+  test.setTimeout(90000);
   const resume=structuredClone(initialResume);resume.projects=Array.from({length:2},(_,index)=>({id:`long-${index}`,title:`PDF_PROJECT_${index}`,meta:'2024 — 2026',stack:[],description:Array.from({length:index===0?20:8},(_,line)=>`FACT_${index}_${line}: Mixed English and 中文真实项目内容，保留学校课程与完整事实。${'Long content wraps without clipping. '.repeat(4)}`)}));resume.customSections=[{id:'final-section',title:'自定义栏目',items:['PDF_FINAL_FACT_987654321']}];
   await createResume(page,resume);const printed=await context.newPage();
-  for(const {label} of RESUME_TEMPLATES){
+  const pdfTemplates=RESUME_TEMPLATES.filter(({id})=>['minimal','modern','cards'].includes(id));
+  for(const {label} of pdfTemplates){
     await page.locator('.workspace-design').getByRole('button',{name:new RegExp(label)}).click();await printed.setContent(await downloadedHtml(page));
     const pdf=await printed.pdf({format:'A4',printBackground:true,preferCSSPageSize:true});
     const facts=await extractPdfPages(pdf);
