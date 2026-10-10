@@ -459,6 +459,15 @@ textarea { resize: vertical; }
 .landing-footer { display: flex; flex-wrap: wrap; gap: 16px 30px; margin-top: 42px; color: #909a92; font-size: 9px; }
 .landing-footer span { display: inline-flex; align-items: center; gap: 6px; }
 .landing-footer svg { color: var(--accent); }
+.landing-guide { margin-top: 42px; padding-top: 28px; border-top: 1px solid var(--line); }
+.landing-guide h2 { margin: 0 0 10px; color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.5; }
+.landing-guide p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.85; }
+.landing-guide-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 24px; }
+.landing-guide-grid h3 { margin: 0 0 8px; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.landing-static .landing-topbar nav { display: flex; flex-wrap: wrap; gap: 16px; }
+.landing-static .landing-topbar a { color: var(--ink-soft); font-size: 12px; }
+.landing-static-script-note { margin-top: 24px; color: var(--accent); }
+@media (max-width: 700px) { .landing-guide-grid { grid-template-columns: 1fr; gap: 20px; } }
 
 .sidebar-toggle { position: absolute; top: 27px; right: 13px; display: grid; place-items: center; width: 27px; height: 27px; border-radius: 5px; background: transparent; color: #78978b; transition: 160ms ease; }
 .sidebar-toggle:hover { background: rgba(255,255,255,.08); color: white; }

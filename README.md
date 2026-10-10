@@ -35,6 +35,8 @@ AI 编辑助手显示待补充或正文已变化的岗位要求。“用 AI 修�
 
 ## 赞助
 
+首页提供作者 Bilibili 主页和 GitHub 项目源码的圆形链接，位于赞助入口左侧。鼠标悬停或键盘聚焦可查看说明，点击在新标签页打开；手机上也可直接点击。
+
 首页的“赞助”按钮位于“本地保存 · 按需AI处理”左侧。悬停或键盘聚焦显示支付宝二维码，点击/触屏可固定和切换；移开、点击外部、Esc或页面滚动可收起。赞助自愿，不影响现有功能。
 
 使用与影画工坊参考项目相同的本地收款码图片 `public/alipay-sponsor-qr.jpg`。该功能只展示图片，不创建支付订单、不查询支付状态、不记录用户支付信息，也不自动登记赞助名单。无需新增Railway环境变量。
@@ -99,6 +101,14 @@ CORS_ORIGIN=https://你的Railway公开域名
 主入口为 `https://esjl.asia`。在同一 Railway 服务绑定 `esjl.asia` 和 `www.esjl.asia`，分别按 Railway 提示配置 DNS 解析并等待 HTTPS 证书生效。服务端会将 `www.esjl.asia` 的请求以 HTTP 308 永久跳转到主入口，保留原路径、查询参数和请求方法。Railway 部署使用平台提供的 `X-Forwarded-Host` 识别原访问域名；本地运行只检查 `Host`。主域名、Railway 原公开域名和健康检查保持可用。
 
 Railway 的 `CORS_ORIGIN` 至少包含 `https://esjl.asia`；若继续使用旧公开地址，可设为 `https://esjl.asia,https://auto-htmlresume-production.up.railway.app`，并保留其他仍使用的来源。跳转不迁移浏览器存储，原来在 www 或 Railway 地址保存的版本仍留在各自来源下。
+
+### 搜索引擎与首页介绍
+
+首页标题、描述和可见介绍自然包含“免费简历”“一键简历”“AI简历”“生成简历”。模板、编辑、岗位版本管理和导出免费使用；自定义AI模型费用以所选服务商为准。首页提供不用执行JavaScript也可读取的公开介绍，应用加载后替换为同内容的交互界面，不会把个人材料写入静态HTML。
+
+`index.html`配置主域名规范地址、Open Graph / Twitter分享信息及WebSite / WebPage结构化数据。`public/robots.txt`允许抓取公开页面和前端资源、排除`/api/`；`public/sitemap.xml`只列主域名首页，构建后与网站一起发布。没有使用关键词堆砌或虚构评分。
+
+上线后可在Google Search Console、Bing Webmaster Tools或百度搜索资源平台验证域名所有权，并提交 `https://esjl.asia/sitemap.xml`。收录与关键词排名由搜索引擎决定，发布这些配置不保证即时收录或特定排名。需要验证文件或meta标记时，使用各平台为本人账号生成的内容，不填写示例验证码。
 
 ### 作者预设报401/403时
 
