@@ -80,7 +80,7 @@ test('placeholder, empty and incorrectly wrapped Keys are rejected before any up
   }finally{upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
-test('text-only preset generation and editing keep high reasoning despite client and legacy env overrides',async()=>{
+test('text-only preset generation and editing keep medium reasoning despite client and legacy env overrides',async()=>{
   const generated={jobTitle:'测试岗位',resume:{name:'测试用户',role:'测试岗位'},report:{summary:'测试分析',requirements:[]},warnings:[]};
   const patch={targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'请求测试',preview:'深蓝色',requiresConfirmation:false};
   const requests:Record<string,unknown>[]=[];
@@ -94,12 +94,12 @@ test('text-only preset generation and editing keep high reasoning despite client
   await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw new Error('No upstream port');
   const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{CF_API_REASONING_EFFORT:'none'});
   try{
-    const metadata=await (await fetch(app.url+'/api/ai/presets')).json();assert.equal(metadata[0].reasoningEffort,'high');
+    const metadata=await (await fetch(app.url+'/api/ai/presets')).json();assert.equal(metadata[0].reasoningEffort,'medium');
     const body={...generationBody,config:{...generationBody.config,reasoningEffort:'low'}};
     const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});assert.equal(response.status,200);const result=await response.json();assert.equal(result.resume.name,'测试用户');assert.equal(result.resume.summary,tailoredSummary);
     const edit=await fetch(app.url+'/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:{...generationBody.config,reasoningEffort:'typo'},prompt:'改姓名颜色',selection:{id:'profile-name'}})});assert.equal(edit.status,200);assert.equal((await edit.json()).patch.value,'#315A64');
     assert.equal(requests.length,3);assert.match(JSON.stringify(requests[1]),/岗位正文改写阶段/);
-    for(const request of requests){assert.equal(request.reasoning_effort,'high');assert.ok(!('reasoning' in request));}
+    for(const request of requests){assert.equal(request.reasoning_effort,'medium');assert.ok(!('reasoning' in request));}
   }
   finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
@@ -145,7 +145,7 @@ test('upstream400 is classified safely without returning its raw message, Key or
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
-test('explicit Responses preset keeps high reasoning for both generation stages and editing despite overrides',async()=>{
+test('explicit Responses preset keeps medium reasoning for both generation stages and editing despite overrides',async()=>{
   const requests:{path:string;body:Record<string,unknown>}[]=[];
   const generated={jobTitle:'测试岗位',resume:{name:'Responses测试用户',role:'测试岗位'},report:{summary:'测试分析',requirements:[]},warnings:[]};
   const patch={targetNodeId:'profile-name',operation:'setStyle',path:'style.color',value:'#315A64',reason:'请求测试',preview:'深蓝色',requiresConfirmation:false};
@@ -161,7 +161,7 @@ test('explicit Responses preset keeps high reasoning for both generation stages 
     const body={...generationBody,config:{...generationBody.config,reasoningEffort:'none'}};
     const generation=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});assert.equal(generation.status,200);const result=await generation.json();assert.equal(result.resume.name,'Responses测试用户');assert.equal(result.resume.summary,tailoredSummary);
     const edit=await fetch(app.url+'/api/ai/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:{...generationBody.config,reasoningEffort:'minimal'},prompt:'改姓名颜色',selection:{id:'profile-name'}})});assert.equal(edit.status,200);assert.equal((await edit.json()).patch.value,'#315A64');
-    assert.equal(requests.length,3);assert.match(String(requests[1].body.instructions),/岗位正文改写阶段/);for(const request of requests){assert.equal(request.path,'/v1/responses');assert.equal(request.body.store,false);assert.equal(request.body.stream,false);assert.deepEqual(request.body.reasoning,{effort:'high'});assert.ok(Array.isArray(request.body.input));assert.ok(!('messages' in request.body));assert.ok(!('reasoning_effort' in request.body));}
+    assert.equal(requests.length,3);assert.match(String(requests[1].body.instructions),/岗位正文改写阶段/);for(const request of requests){assert.equal(request.path,'/v1/responses');assert.equal(request.body.store,false);assert.equal(request.body.stream,false);assert.deepEqual(request.body.reasoning,{effort:'medium'});assert.ok(Array.isArray(request.body.input));assert.ok(!('messages' in request.body));assert.ok(!('reasoning_effort' in request.body));}
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });
 
@@ -176,7 +176,7 @@ test('unknown upstream400 carries visible safe context and a trace that matches 
   try{
     const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});
     assert.equal(response.status,502);const payload=await response.json();assert.equal(payload.upstreamStatus,400);assert.equal(payload.diagnostic,'unknown');
-    assert.equal(payload.diagnostics.protocol,'chat_completions');assert.equal(payload.diagnostics.model,'test-model');assert.equal(payload.diagnostics.reasoningEffort,'high');assert.equal(payload.diagnostics.version,'abcdef1');
+    assert.equal(payload.diagnostics.protocol,'chat_completions');assert.equal(payload.diagnostics.model,'test-model');assert.equal(payload.diagnostics.reasoningEffort,'medium');assert.equal(payload.diagnostics.version,'abcdef1');
     assert.match(payload.requestId,/^[0-9a-f-]{36}$/);assert.equal(response.headers.get('x-app-request-id'),payload.requestId);
     const log=app.logs.join('');assert.match(log,/\[ai-error\]/);assert.ok(log.includes(payload.requestId));assert.ok(log.includes('chat_completions'));assert.ok(log.includes('400'));
     for(const forbidden of [fakeKey,generationBody.profileText,'unrecognized relay detail']){assert.ok(!JSON.stringify(payload).includes(forbidden));assert.ok(!log.includes(forbidden));}
@@ -190,10 +190,10 @@ test('configured deadline aborts a slow upstream once and reports waiting phase/
     response.on('close',()=>clearTimeout(timer));
   });
   await listenLocal(upstream);const address=upstream.address();if(!address||typeof address==='string')throw Error('No upstream port');
-  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_REQUEST_TIMEOUT_MS:'1000',CF_API_REASONING_EFFORT:'high'});
+  const app=await localApp(`http://127.0.0.1:${address.port}/v1`,fakeKey,{AI_REQUEST_TIMEOUT_MS:'1000',CF_API_REASONING_EFFORT:'medium'});
   try{
     const response=await fetch(app.url+'/api/ai/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(generationBody)});assert.equal(response.status,504);
-    const payload=await response.json();assert.equal(payload.diagnostic,'request_timeout');assert.equal(payload.diagnostics.timeoutMs,1000);assert.equal(payload.diagnostics.phase,'waiting_response');assert.ok(payload.diagnostics.elapsedMs>=900);assert.equal(payload.diagnostics.reasoningEffort,'high');assert.equal(calls,1);
+    const payload=await response.json();assert.equal(payload.diagnostic,'request_timeout');assert.equal(payload.diagnostics.timeoutMs,1000);assert.equal(payload.diagnostics.phase,'waiting_response');assert.ok(payload.diagnostics.elapsedMs>=900);assert.equal(payload.diagnostics.reasoningEffort,'medium');assert.equal(calls,1);
     for(const text of [fakeKey,generationBody.profileText]){assert.ok(!JSON.stringify(payload).includes(text));assert.ok(!app.logs.join('').includes(text));}
   }finally{app.child.kill();upstream.closeAllConnections();await new Promise<void>(resolve=>upstream.close(()=>resolve()));}
 });

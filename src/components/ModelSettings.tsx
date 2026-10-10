@@ -64,7 +64,7 @@ export function ModelSettings({ config, presets, onChange, onClose, onSave }: {
           onChange={event => onChange({ ...config, reasoningEffort: parseReasoningEffort(event.target.value) })}>
           {REASONING_EFFORTS.map(effort => <option key={effort} value={effort}>{reasoningLabels[effort]}</option>)}
         </select>
-        <p id="model-reasoning-note">{isAuthor ? <><LockKeyhole size={13}/>作者预设固定为 high</> : '通道默认由模型服务决定；指定强度须由所选模型支持。'}</p>
+        <p id="model-reasoning-note">{isAuthor ? <><LockKeyhole size={13}/>作者预设固定为 {AUTHOR_REASONING_EFFORT}</> : '通道默认由模型服务决定；指定强度须由所选模型支持。'}</p>
       </div>
       <div className="modal-foot">
         <button className="ghost-button" onClick={onClose}>取消</button>

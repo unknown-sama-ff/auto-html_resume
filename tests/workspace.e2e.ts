@@ -121,9 +121,9 @@ test('AI settings expose exactly the author preset and custom URL, even with old
   await expect(dialog.locator('.model-mode-tabs button')).toHaveText(['作者预设6.1-sol','自定义URL']);
   await expect(dialog.locator('.preset-item')).toHaveCount(0);
   await expect(dialog).not.toContainText('DeepSeek');await expect(dialog).not.toContainText('READY');
-  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('high');
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('medium');
   await expect(dialog.getByLabel('思考强度', { exact: true })).toBeDisabled();
-  await expect(dialog).toContainText('作者预设固定为 high');
+  await expect(dialog).toContainText('作者预设固定为 medium');
   await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
   await expect(dialog.getByLabel('完整 URL',{exact:false})).toBeVisible();
   await expect(dialog.getByLabel('模型名称',{exact:true})).toBeVisible();
@@ -143,7 +143,7 @@ test('custom URL fields survive mode toggles; cancel leaves the author default a
   await dialog.getByLabel('API Key',{exact:false}).fill('test-key');
   await dialog.getByLabel('思考强度', { exact: true }).selectOption('low');
   await dialog.getByRole('button',{name:'作者预设6.1-sol',exact:true}).click();
-  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('high');
+  await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('medium');
   await expect(dialog.getByLabel('思考强度', { exact: true })).toBeDisabled();
   await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();
   await expect(dialog.getByLabel('完整 URL',{exact:false})).toHaveValue('https://api.example.com/v1');
