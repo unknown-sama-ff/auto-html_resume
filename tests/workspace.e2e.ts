@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { initialResume } from '../src/data';
+import { makeVersion } from '../src/lib/workspace';
 import type { GenerationResult } from '../src/types';
 const makeResult=(name='张雨',role='数据分析师'):GenerationResult=>{
   const resume=structuredClone(initialResume);resume.name=name;resume.role=role;resume.projects[0].title='电商数据分析';
@@ -234,19 +235,63 @@ test('saved version seeds a new role resume after reload while keeping versions 
   await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
   await page.locator(`.version-item[data-version-id="${firstId}"]`).click();
   await page.getByRole('button',{name:'基于当前版本创建岗位简历',exact:true}).click();
-  await expect(page.locator('.landing-source-note')).toContainText('个人资料已带入');
+  await expect(page.locator('.new-role-guide h1')).toHaveText('为新岗位创建简历');
+  await expect(page.locator('.new-role-guide')).toContainText('张雨 · 数据分析师');
+  await expect(page.locator('.new-role-guide')).toContainText('岗位');
+  await expect(page.locator('.imported-profile-panel')).toContainText('已带入的个人资料');
+  await expect(page.locator('.imported-profile-panel')).toContainText('张雨 · 数据分析师');
+  await expect(page.locator('.imported-profile-panel textarea')).toHaveValue(profile);
+  await expect(page.locator('.imported-profile-panel textarea')).toBeEditable();
   await expect(page.locator('.intake-card textarea').nth(0)).toHaveValue(profile);
   await expect(page.locator('.intake-card textarea').nth(1)).toHaveValue('');
   await expect(page.locator('.consent-line input')).not.toBeChecked();
+  await page.screenshot({path:'.tmp/screenshots/new-role-desktop.png',fullPage:true});
+  await page.getByRole('button',{name:'填写新岗位要求',exact:true}).click();
+  await expect(page.locator('.intake-card textarea').nth(1)).toBeFocused();
+  await expect(page.locator('.intake-card textarea').nth(1)).toBeInViewport();
+
+  await page.locator('.imported-profile-panel textarea').fill('草稿修改，不应覆盖第一份简历');
+  await page.getByRole('button',{name:'返回原简历',exact:true}).click();
+  await expect(page.locator('.version-select')).toHaveValue(firstId);
+  await expect(page.locator('.version-select option')).toHaveCount(1);
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  await page.getByRole('button',{name:'基于当前版本创建岗位简历',exact:true}).click();
+  await expect(page.locator('.imported-profile-panel textarea')).toHaveValue(profile);
 
   await page.locator('.intake-card textarea').nth(1).fill(jobs[1]);
   await page.locator('.consent-line input').check();
-  await page.getByRole('button',{name:'生成我的岗位简历'}).click();
+  await page.getByRole('button',{name:'生成新岗位简历',exact:true}).click();
   await expect(page.locator('.version-select option')).toHaveCount(2);
   await expect(page.locator('.document-heading')).toContainText('产品经理');
   expect(requests).toEqual([{profileText:profile,jobText:jobs[0]},{profileText:profile,jobText:jobs[1]}]);
   await page.locator('.version-select').selectOption(firstId);
   await expect(page.locator('.document-heading')).toContainText('数据分析师');
+});
+
+test('older saved versions without source materials still show editable personal details for the next role',async({page})=>{
+  const oldVersion=makeVersion(makeResult());
+  const oldBackup=JSON.stringify({schemaVersion:2,activeVersionId:oldVersion.id,versions:[{...oldVersion,profileText:undefined}]});
+  await page.goto('/');
+  await page.locator('.landing-topbar').getByRole('button',{name:'备份与恢复',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'简历备份与恢复',exact:true});
+  await dialog.getByLabel('选择简历备份文件',{exact:true}).setInputFiles({name:'older-backup.json',mimeType:'application/json',buffer:Buffer.from(oldBackup)});
+  await dialog.getByRole('button',{name:'恢复这些简历',exact:true}).click();
+  await expect(page.locator('.save-state')).toHaveText('已本地保存');
+  const originalId=await page.locator('.version-select').inputValue();
+  await page.reload();
+  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.locator(`.version-item[data-version-id="${originalId}"]`).click();
+  await page.getByRole('button',{name:'基于当前版本创建岗位简历',exact:true}).click();
+  await expect(page.locator('.new-role-guide h1')).toHaveText('为新岗位创建简历');
+  const imported=page.locator('.imported-profile-panel textarea');
+  await expect(imported).toBeEditable();
+  await expect(imported).toHaveValue(/张雨/);
+  await expect(imported).toHaveValue(/电商数据分析/);
+  await expect(page.locator('.intake-card textarea').nth(1)).toHaveValue('');
+  await expect(page.getByRole('button',{name:'生成新岗位简历',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'返回原简历',exact:true}).click();
+  await expect(page.locator('.version-select')).toHaveValue(originalId);
+  await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
 });
 
 test('version deletion requires confirmation, keeps other versions, and persists after reload',async({page})=>{

@@ -1,4 +1,4 @@
-import { History, Home, LayoutTemplate, PanelLeftClose, PanelLeftOpen, Plus, ShieldCheck, Target, Trash2 } from 'lucide-react';
+import { Archive, History, Home, LayoutTemplate, PanelLeftClose, PanelLeftOpen, Plus, ShieldCheck, Target, Trash2 } from 'lucide-react';
 import type { ResumeVersion } from '../types';
 type SidebarView = 'home' | 'workspace' | 'match' | 'history';
 type Props = {
@@ -29,7 +29,8 @@ export function Sidebar(p: Props) {
         <button className="version-delete" aria-label={`删除版本：${version.title}`} title={`删除版本：${version.title}`} disabled={p.busy} onClick={() => p.onDelete(version.id)}><Trash2 size={14}/></button>
       </div>)}</div>
       {p.versions.length === 0 && <div className="sidebar-empty"><strong>还没有保存的简历</strong><p>在主页上传个人资料和岗位要求，即可生成第一份简历。</p></div>}
-      {p.versions.length > 0 && <button className="rail-backup" onClick={p.onBackup}>下载全部版本备份</button>}
+      <button className="rail-backup" disabled={p.busy} onClick={p.onBackup}><Archive size={14}/>备份与恢复</button>
+      <p className="rail-backup-help">保存到电脑，下次导入即可继续编辑。</p>
     </div>
     <div className="rail-bottom"><div className="privacy-card"><ShieldCheck size={15}/><span>版本只保存在本浏览器<br/><small>建议删除前下载备份</small></span></div></div>
   </aside>;
