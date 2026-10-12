@@ -4,6 +4,7 @@ import { SponsorButton } from './SponsorButton';
 import { AuthorLinks } from './AuthorLinks';
 import { TemplatePicker } from './TemplatePicker';
 import { NewRoleGuide } from './NewRoleGuide';
+import { VoiceTextarea } from './VoiceTextarea';
 import type { TemplateId } from '../../shared/design';
 type Props = {
   profileText:string;jobText:string;profileMaterial:ParsedMaterial|null;jobMaterial:ParsedMaterial|null;
@@ -27,7 +28,7 @@ export function LandingPage(p:Props){
     return <div className={`intake-card ${!profile?'job-intake':''} ${imported?'imported-profile-panel':''}`} key={kind}><div className="intake-card-head"><span className="intake-number">{imported?<CheckCircle2 size={19}/>:profile?'01':'02'}</span><div><strong>{imported?'已带入的个人资料':profile?'你的个人资料':p.sourceVersionTitle?'填写新的目标岗位':'你的目标岗位'}</strong><small>{imported?`来源：${p.sourceVersionTitle}`:profile?'学校、课程、项目、实习、获奖、技能与作品链接':'岗位职责、必备技能、经验要求与招聘截图'}</small></div></div>
     {imported&&<div className="imported-profile-info"><span><CheckCircle2 size={14}/>{p.sourceProfileKind==='resume'?'已提取当前简历正文':p.sourceFileName?`已带入 ${p.sourceFileName} 的文字资料`:'已带入保存的个人资料'}</span><p>{p.sourceProfileKind==='resume'?'此版本未保存原始资料，已从当前简历正文提取。请核对下方内容后继续。':'完整资料显示在下方，可直接修改或补充。新岗位将使用这些资料重新分析。'}</p>{p.photo&&<span><CheckCircle2 size={14}/>头像已带入，可在下方更换</span>}</div>}
     <label className="intake-upload">{profile?<Upload size={18}/>:<BriefcaseBusiness size={18}/>}<span><b>{material?.name??(profile?'上传已有简历或个人资料':'上传岗位文件或截图')}</b><small>{p.reading?'正在读取文件…':material?.image?'图片已就绪，将由支持视觉的模型读取':material?`已解析${material.format.toUpperCase()}文字，可与下方补充内容一起分析`:'TXT、PDF、Word .docx、HTML；图片原图≤10 MB，自动处理至≤2 MB / 最长边3200px'}</small></span><input aria-label={profile?'上传个人资料文件':'上传岗位要求文件'} type="file" accept=".txt,.pdf,.docx,.doc,.html,.htm,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,image/png,image/jpeg,image/webp" disabled={p.busy||p.reading} onChange={e=>{const f=e.target.files?.[0];if(f)p.onFile(kind,f);e.target.value='';}}/></label>
-    <label className="input-label">{imported?'已带入的完整资料 · 可直接编辑':profile?'补充个人信息':p.sourceVersionTitle?'新岗位名称、职责与任职要求':'补充岗位要求'}<textarea id={!profile?'new-role-job':undefined} value={profile?p.profileText:p.jobText} onChange={e=>(profile?p.onProfile:p.onJob)(e.target.value)} placeholder={profile?'例如：姓名、学校和课程、项目和结果、实习和获奖。请填写真实信息。':'例如：数据分析师，负责经营分析，要求熟悉Python和SQL。'} rows={imported?10:7} maxLength={50000} disabled={p.busy}/></label>
+    <label className="input-label">{imported?'已带入的完整资料 · 可直接编辑':profile?'补充个人信息':p.sourceVersionTitle?'新岗位名称、职责与任职要求':'补充岗位要求'}<VoiceTextarea id={!profile?'new-role-job':undefined} value={profile?p.profileText:p.jobText} onChange={profile?p.onProfile:p.onJob} label={profile?'个人资料':'岗位要求'} placeholder={profile?'例如：姓名、学校和课程、项目和结果、实习和获奖。请填写真实信息。':'例如：数据分析师，负责经营分析，要求熟悉Python和SQL。'} rows={imported?10:7} maxLength={50000} disabled={p.busy}/></label>
     {material?.text&&<details className="extracted-material"><summary>查看提取的文字</summary><pre>{material.text}</pre></details>}
     </div>;
   })}</section>

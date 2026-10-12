@@ -434,3 +434,47 @@ test('local deadline feedback displays elapsed time, stage and high effort witho
   await page.goto('/');await page.locator('.intake-card textarea').first().fill('超时后保留个人资料');await page.locator('.intake-card textarea').nth(1).fill('超时后保留岗位');await page.locator('.consent-line input').check();await page.getByRole('button',{name:'生成我的岗位简历'}).click();
   const alert=page.getByRole('alert');await expect(alert).toContainText('应用 HTTP 504');await expect(alert).toContainText('等待上限 240秒');await expect(alert).toContainText('耗时 240.1秒');await expect(alert).toContainText('等待通道响应');await expect(alert).toContainText('high');await expect(page.locator('.intake-card textarea').first()).toHaveValue('超时后保留个人资料');await expect(page.locator('.resume-paper')).toHaveCount(0);
 });
+
+test('mobile core textareas expose hold-to-talk voice input with caret insertion',async({page})=>{
+  await page.addInitScript(()=>{
+    localStorage.removeItem('easy-resume-voice-consent-v1');
+    class FakeRecognition {
+      static latest: FakeRecognition | undefined;
+      lang='';continuous=false;interimResults=false;
+      onstart: (()=>void)|null=null;onresult: ((event:unknown)=>void)|null=null;onerror: ((event:unknown)=>void)|null=null;onend: (()=>void)|null=null;
+      constructor(){FakeRecognition.latest=this;Object.assign(window,{__voiceInstance:this});}
+      start(){this.onstart?.();}
+      stop(){this.onend?.();}
+      abort(){ }
+    }
+    Object.assign(window,{SpeechRecognition:FakeRecognition,webkitSpeechRecognition:FakeRecognition});
+    Object.assign(window,{__voiceRecognition:FakeRecognition});
+  });
+  await page.setViewportSize({width:390,height:844});await page.goto('/');
+  await expect(page.locator('.voice-textarea-button')).toHaveCount(2);
+  const field=page.locator('.intake-card textarea').first();await field.fill('姓名：张雨');await field.evaluate(element=>{const textarea=element as HTMLTextAreaElement;textarea.focus();textarea.setSelectionRange(3,3);});
+  await page.locator('.voice-textarea-button').first().dispatchEvent('pointerdown',{pointerId:1});
+  await expect(page.getByRole('dialog',{name:'允许使用语音输入？'})).toBeVisible();
+  await page.locator('.voice-textarea-button').first().dispatchEvent('pointerup',{pointerId:1});
+  await page.getByRole('button',{name:'同意',exact:true}).click();
+  expect(await page.evaluate(()=>Boolean((window as unknown as {__voiceInstance?:unknown}).__voiceInstance))).toBe(false);
+  await page.locator('.voice-textarea-button').first().dispatchEvent('pointerdown',{pointerId:2});
+  await page.evaluate(()=>{
+    const recognition=(window as unknown as {__voiceInstance?:{onresult?: (event:unknown)=>void;onend?:()=>void}}).__voiceInstance;
+    recognition?.onresult?.({resultIndex:0,results:[{isFinal:true,0:{transcript:'李明'}}]});
+  });
+  await page.locator('.voice-textarea-button').first().dispatchEvent('pointerup',{pointerId:2});
+  await expect(field).toHaveValue('姓名：李明张雨');
+  await expect(page.locator('.intake-card textarea')).toHaveCount(2);
+});
+
+test('mobile workbench keeps preview first and provides bottom navigation with drawer scroll lock',async({page})=>{
+  await page.setViewportSize({width:390,height:844});await page.goto('/');await generate(page);
+  const nav=page.locator('.mobile-workbench-nav');await expect(nav).toBeVisible();
+  await expect(page.getByRole('button',{name:'导出 HTML',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'导出 PDF',exact:true})).toBeVisible();
+  await nav.getByRole('button',{name:'匹配',exact:true}).click();await expect(nav.getByRole('button',{name:'匹配',exact:true})).toHaveAttribute('aria-current','location');
+  await nav.getByRole('button',{name:'历史',exact:true}).click();await expect(nav.getByRole('button',{name:'历史',exact:true})).toHaveAttribute('aria-current','location');
+  await page.getByRole('button',{name:'展开侧边栏'}).click();await expect(page.locator('body')).toHaveCSS('overflow','hidden');
+  await page.getByRole('button',{name:'收起侧边栏',exact:true}).click();await expect(page.locator('body')).not.toHaveCSS('overflow','hidden');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
+});

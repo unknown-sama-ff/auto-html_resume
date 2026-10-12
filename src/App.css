@@ -28,6 +28,32 @@ button { border: 0; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.42; }
 textarea { resize: vertical; }
 
+.voice-textarea { display: grid; gap: 8px; min-width: 0; }
+.voice-textarea > textarea { min-width: 0; }
+.voice-textarea-actions { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.voice-textarea-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 12px; border: 1px solid #d4d9d1; border-radius: 6px; background: #f3f6ef; color: #49634e; font-size: 10px; font-weight: 700; touch-action: manipulation; transition: 160ms ease; }
+.voice-textarea-button:hover { border-color: #91aa8d; background: #eaf1e6; color: #315b45; }
+.voice-textarea.is-recording .voice-textarea-button { border-color: #c76648; background: #fff0e8; color: #a4472f; box-shadow: 0 0 0 3px rgba(217,105,69,.12); }
+.voice-textarea-button:disabled { cursor: not-allowed; }
+.voice-textarea-status { max-width: 100%; color: #7a6b60; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.voice-textarea.is-recording .voice-textarea-status { color: #a4472f; }
+.voice-consent-dialog { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 18px; background: rgba(25, 59, 53, .34); }
+.voice-consent-panel { width: min(420px, 100%); padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); box-shadow: 0 18px 48px rgba(20, 36, 29, .22); }
+.voice-consent-panel h2 { margin: 0 0 9px; color: var(--ink); font-size: 20px; line-height: 1.35; }
+.voice-consent-panel p { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.75; }
+.voice-consent-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.voice-consent-actions button { min-height: 44px; padding: 0 13px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+.voice-consent-cancel { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); }
+.voice-consent-confirm { background: var(--rail); color: #fff9f0; }
+@media (max-width: 610px) {
+  .voice-textarea-actions { align-items: flex-start; flex-wrap: wrap; }
+  .voice-textarea-button { min-height: 46px; }
+  .voice-textarea-status { flex: 1 1 160px; }
+  .voice-consent-panel { padding: 18px; }
+  .voice-consent-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .voice-consent-actions button { width: 100%; }
+}
+
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 238px minmax(0, 1fr); background: var(--paper); }
 .side-rail { min-height: 100vh; padding: 27px 18px 18px; background: var(--rail); color: #f5efe5; display: flex; flex-direction: column; }
 .brand-lockup { display: flex; align-items: center; gap: 10px; padding: 0 12px; }
@@ -745,6 +771,7 @@ textarea { resize: vertical; }
 .sidebar-empty strong {color:#bbcfc3;font-size:11px;}
 .sidebar-empty p {margin:6px 0 0;}
 .sidebar-scrim {display:none;}
+.mobile-workbench-nav {display:none;}
 .delete-backdrop {z-index:65;}
 .delete-version-modal {width:min(100%,460px);}
 .delete-version-modal .modal-head h2 {font-size:26px;}
@@ -766,7 +793,29 @@ textarea { resize: vertical; }
   .app-shell:not(.sidebar-collapsed)>.side-rail .rail-bottom {display:grid;gap:12px;margin-top:20px;}
   .app-shell:not(.sidebar-collapsed)>.side-rail .sidebar-toggle {top:22px;right:12px;}
   .app-shell:not(.sidebar-collapsed) .version-list {max-height:none;}
-  .sidebar-scrim {display:block;position:fixed;inset:0;z-index:34;background:rgba(24,50,40,.34);border:0;}
+   .sidebar-scrim {display:block;position:fixed;inset:0;z-index:34;background:rgba(24,50,40,.34);border:0;}
+   .workspace-shell .panel-heading,
+   .workspace-shell .chat-card,
+   .workspace-shell .match-editing-panel,
+   .workspace-shell .conversation-card {scroll-margin-top:18px;}
+   .workspace-shell .preview-toolbar {flex-wrap:nowrap;align-items:center;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;}
+   .workspace-shell .preview-toolbar > div:first-child {flex:0 0 auto;}
+   .workspace-shell .preview-tools {flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;}
+   .workspace-shell .preview-tools .icon-button,
+   .workspace-shell .preview-tools .zoom-step {min-width:44px;min-height:44px;}
+   .workspace-shell .preview-tools .zoom-range {min-width:72px;}
+   .workspace-shell .export-actions {flex-wrap:wrap;}
+   .workspace-shell .outline-button,
+   .workspace-shell .primary-button,
+   .workspace-shell .model-status-button,
+   .workspace-shell .quiet-icon,
+   .workspace-shell .sidebar-toggle {min-width:44px;min-height:44px;}
+   .workspace-shell .sidebar-toggle {width:44px;height:44px;}
+   .workspace-shell .document-actions {width:100%;}
+   .workspace-shell .document-actions > button {flex:1 1 180px;min-height:44px;}
+   .workspace-shell .chat-card,
+   .workspace-shell .match-editing-panel,
+   .workspace-shell .conversation-card {overflow-wrap:anywhere;}
   .home-shell .landing-topbar {padding:14px 18px;gap:10px;}
   .home-shell .landing-main {width:calc(100% - 32px);}
 }
@@ -774,6 +823,23 @@ textarea { resize: vertical; }
   .home-shell .landing-topbar {padding:14px 12px;}
   .home-shell .landing-main {width:calc(100% - 24px);}
   .delete-version-name {margin-inline:15px;}
+   .workspace-shell .topbar {gap:10px;}
+   .workspace-shell .topbar-actions {width:100%;flex-wrap:wrap;}
+   .workspace-shell .topbar .model-status-button {flex:0 0 auto;}
+   .workspace-shell .export-actions {flex:1 1 100%;display:flex;min-width:0;}
+   .workspace-shell .export-actions .outline-button {flex:1 1 0;min-width:0;padding-inline:8px;}
+   .workspace-shell .preview-toolbar {margin-inline:-8px;padding-inline:8px;}
+   .workspace-shell .preview-toolbar strong {white-space:nowrap;}
+   .workspace-shell .preview-tools .icon-button,
+   .workspace-shell .preview-tools .zoom-step {min-width:44px;width:44px;height:44px;}
+   .workspace-shell .editor-workbench {padding-bottom:12px;}
+   .workspace-shell .chat-actions {align-items:stretch;flex-wrap:wrap;}
+   .workspace-shell .chat-actions > button {min-height:44px;}
+   .workspace-shell .app-main {padding-bottom:calc(84px + env(safe-area-inset-bottom));}
+   .mobile-workbench-nav {position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));border-top:1px solid rgba(33,49,45,.14);background:rgba(251,248,241,.96);box-shadow:0 -8px 24px rgba(33,49,45,.12);backdrop-filter:blur(12px);}
+   .mobile-workbench-nav button {display:flex;min-height:44px;align-items:center;justify-content:center;gap:6px;border:1px solid transparent;border-radius:7px;background:transparent;color:#718078;font-size:11px;font-weight:700;}
+   .mobile-workbench-nav button.active {border-color:#e0b6a1;background:#fff3e9;color:var(--accent);}
+   .mobile-workbench-nav button:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
 }
 @media print {.sidebar-scrim,.delete-backdrop{display:none!important;}}
 
