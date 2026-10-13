@@ -99,6 +99,10 @@ test('collapsed mobile rail keeps only the sidebar toggle control',async({page})
   await expect(rail.locator('.sidebar-toggle')).toHaveCSS('height','44px');
   await expect(rail).toHaveCSS('position','fixed');
   await expect(page.locator('.app-main')).toHaveCSS('width','390px');
+  await rail.locator('.sidebar-toggle').click();
+  await expect(rail).toHaveCSS('position','fixed');
+  await expect(page.locator('.app-main')).toHaveCSS('width','390px');
+  await expect(page.getByRole('button',{name:'收起侧边栏背景'})).toBeVisible();
 });
 
 test('PDF extraction runs in browser and its contents reach the generator',async({page})=>{
