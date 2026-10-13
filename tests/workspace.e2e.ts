@@ -88,6 +88,15 @@ test('phone viewport keeps both export actions available without horizontal page
   await page.setViewportSize({width:390,height:844});await page.goto('/');await generate(page);await expect(page.getByRole('button',{name:'导出 HTML',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'导出 PDF',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
 });
 
+test('photo upload appears above visual direction on the home page',async({page})=>{
+  await page.goto('/');
+  const photo=page.locator('.photo-intake');
+  const design=page.locator('.intake-design');
+  await expect(photo).toBeVisible();
+  await expect(design).toBeVisible();
+  expect(await photo.evaluate(element=>Boolean(element.compareDocumentPosition(document.querySelector('.intake-design')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+});
+
 test('collapsed mobile rail keeps only the sidebar toggle control',async({page})=>{
   await page.setViewportSize({width:390,height:844});await page.goto('/');
   const rail=page.locator('.side-rail');
