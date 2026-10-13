@@ -97,6 +97,8 @@ test('collapsed mobile rail keeps only the sidebar toggle control',async({page})
   await expect(rail.locator('.version-block')).toBeHidden();
   await expect(rail.locator('.sidebar-toggle')).toHaveCSS('width','44px');
   await expect(rail.locator('.sidebar-toggle')).toHaveCSS('height','44px');
+  await expect(rail).toHaveCSS('position','fixed');
+  await expect(page.locator('.app-main')).toHaveCSS('width','390px');
 });
 
 test('PDF extraction runs in browser and its contents reach the generator',async({page})=>{
@@ -130,7 +132,7 @@ test('AI settings expose exactly the author preset and custom URL, even with old
   ]}));
   await page.goto('/');await page.getByRole('button',{name:'AI 模型',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'AI 模型设置'});
-  await expect(dialog.locator('.model-mode-tabs button')).toHaveText(['作者预设6.1-sol','自定义URL']);
+  await expect(dialog.locator('.model-mode-tabs button')).toHaveText(['作者预设gpt-6-luna','自定义URL']);
   await expect(dialog.locator('.preset-item')).toHaveCount(0);
   await expect(dialog).not.toContainText('DeepSeek');await expect(dialog).not.toContainText('READY');
   await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('medium');
@@ -154,7 +156,7 @@ test('custom URL fields survive mode toggles; cancel leaves the author default a
   await dialog.getByLabel('模型名称',{exact:true}).fill('custom-test-model');
   await dialog.getByLabel('API Key',{exact:false}).fill('test-key');
   await dialog.getByLabel('思考强度', { exact: true }).selectOption('low');
-  await dialog.getByRole('button',{name:'作者预设6.1-sol',exact:true}).click();
+  await dialog.getByRole('button',{name:'作者预设gpt-6-luna',exact:true}).click();
   await expect(dialog.getByLabel('思考强度', { exact: true })).toHaveValue('medium');
   await expect(dialog.getByLabel('思考强度', { exact: true })).toBeDisabled();
   await dialog.getByRole('button',{name:'自定义URL',exact:true}).click();

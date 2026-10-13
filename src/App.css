@@ -782,7 +782,9 @@ textarea { resize: vertical; }
 .delete-version-modal .ghost-button {font-size:11px;}
 @media(max-width:930px){
   .app-shell>.app-main {grid-column:2;}
-  .app-shell.sidebar-collapsed>.side-rail {display:flex;align-items:center;justify-content:flex-start;padding:12px 10px;}
+  .app-shell.sidebar-collapsed {display:block;}
+  .app-shell.sidebar-collapsed>.app-main {grid-column:auto;width:100%;}
+  .app-shell.sidebar-collapsed>.side-rail {position:fixed;top:12px;left:12px;z-index:40;display:flex;align-items:center;justify-content:center;width:52px;height:52px;min-height:52px;padding:4px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:rgba(25,59,53,.96);box-shadow:0 8px 22px rgba(17,38,31,.24);}
   .app-shell.sidebar-collapsed>.side-rail .brand-lockup,
   .app-shell.sidebar-collapsed>.side-rail .rail-caption,
   .app-shell.sidebar-collapsed>.side-rail .rail-nav,
