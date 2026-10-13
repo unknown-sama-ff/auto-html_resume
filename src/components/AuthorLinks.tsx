@@ -16,6 +16,16 @@ export function AuthorLinks() {
       </svg>
       <span className="author-link-tooltip" id={`${tooltipId}-bilibili`} role="tooltip">作者 Bilibili 主页</span>
     </a>
+    <a className="author-link author-link-douyin" href="https://www.douyin.com/user/MS4wLjABAAAA6zJjn2X4oSR1B8c7Py_GH0MtbZcBw9ge4Ka_wgOQDF6h8qaqe3OBTA3SDTlwJT24?from_tab_name=main"
+      target="_blank" rel="noopener noreferrer" title="作者抖音主页"
+      aria-label="作者抖音主页（在新标签页打开）" aria-describedby={`${tooltipId}-douyin`}>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+        <path d="M14 4v10.2a4.2 4.2 0 1 1-3.2-4.08" stroke="#25f4ee" strokeWidth="1.9" strokeLinecap="round"/>
+        <path d="M14 4v10.2a4.2 4.2 0 1 1-3.2-4.08" stroke="#fe2c55" strokeWidth="1.9" strokeLinecap="round" transform="translate(1 0)"/>
+        <path d="M14 4v10.2a4.2 4.2 0 1 1-3.2-4.08M14 4c.55 2.25 2.05 3.85 4.2 4.45" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <span className="author-link-tooltip" id={`${tooltipId}-douyin`} role="tooltip">作者抖音主页</span>
+    </a>
     <a className="author-link author-link-github" href="https://github.com/unknown-sama-ff/auto-html_resume"
       target="_blank" rel="noopener noreferrer" title="GitHub 项目主页"
       aria-label="GitHub 项目主页（在新标签页打开）" aria-describedby={`${tooltipId}-github`}>

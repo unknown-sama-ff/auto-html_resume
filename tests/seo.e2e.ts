@@ -39,12 +39,14 @@ test('public discovery files are served as text and XML and only list the canoni
 test('author icons use the requested destinations and reveal descriptions on hover and keyboard focus', async ({ page }) => {
   await page.goto('/');
   const links = page.getByRole('navigation', { name: '作者与项目链接' });
-  await expect(links.getByRole('link')).toHaveCount(2);
+  await expect(links.getByRole('link')).toHaveCount(3);
   const bilibili = links.getByRole('link', { name: /作者 Bilibili 主页/ });
+  const douyin = links.getByRole('link', { name: /作者抖音主页/ });
   const github = links.getByRole('link', { name: /GitHub 项目主页/ });
   await expect(bilibili).toHaveAttribute('href', 'https://space.bilibili.com/661830801');
+  await expect(douyin).toHaveAttribute('href', 'https://www.douyin.com/user/MS4wLjABAAAA6zJjn2X4oSR1B8c7Py_GH0MtbZcBw9ge4Ka_wgOQDF6h8qaqe3OBTA3SDTlwJT24?from_tab_name=main');
   await expect(github).toHaveAttribute('href', 'https://github.com/unknown-sama-ff/auto-html_resume');
-  for (const link of [bilibili, github]) {
+  for (const link of [bilibili, douyin, github]) {
     await expect(link).toHaveAttribute('target', '_blank');
     await expect(link).toHaveAttribute('rel', /noopener/);
     const tooltip = link.getByRole('tooltip');
@@ -78,9 +80,10 @@ test.describe('phone author links', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
   test('touch opens each destination in a separate tab and the header stays within the viewport', async ({ page, context }) => {
     await context.route('https://space.bilibili.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>Bilibili test</title>' }));
+    await context.route('https://www.douyin.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>Douyin test</title>' }));
     await context.route('https://github.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>GitHub test</title>' }));
     await page.goto('/');
-    for (const name of [/作者 Bilibili 主页/, /GitHub 项目主页/]) {
+    for (const name of [/作者 Bilibili 主页/, /作者抖音主页/, /GitHub 项目主页/]) {
       const link = page.getByRole('link', { name });
       const box = await link.boundingBox();
       expect(box).not.toBeNull();
