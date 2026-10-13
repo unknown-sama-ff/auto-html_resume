@@ -68,7 +68,7 @@ test('custom sections are obvious, editable, reorderable, removable and recovera
   await expect(page.locator('.resume-paper')).toContainText('日语 N1');
   const version = await page.locator('.version-select').inputValue();
   await expect(page.locator('.save-state')).toContainText('已本地保存');
-  await page.reload(); await page.getByRole('button', { name: '打开版本侧边栏', exact: true }).click();
+  await page.reload(); await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
   await page.locator('.version-item[data-version-id="' + version + '"]').click();
   await expect(page.locator('.resume-paper')).toContainText('日语 N1');
   const html = await download(page);
@@ -110,7 +110,7 @@ test('match analysis brings context into AI editing and suggestion preview never
   await page.locator('.match-editing-panel').getByRole('button', { name: '查看全部' }).click();
   await page.locator('.analysis-card').getByRole('button', { name: '编辑对应描述' }).click();
   await expect(page.locator('.selected-context-chip')).toContainText('智能简历工作台');
-  await expect(page.getByLabel('AI修改要求')).toContainText('清楚描述已有产品设计经验');
+  await expect(page.getByRole('textbox', { name: 'AI修改要求', exact: true })).toHaveValue(/清楚描述已有产品设计经验/);
   await page.getByRole('button', { name: '生成修改', exact: true }).click();
   await expect(page.locator('.patch-card')).toContainText('精简项目描述');
   expect(String(payload.prompt)).toContain('保留现有责任范围');

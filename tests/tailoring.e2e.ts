@@ -129,7 +129,7 @@ test('preset tailoring maps a requirement to its source and rewritten resume, pe
   await assertVisibleMapping(page);
   await expect(page.locator('.save-state')).toContainText('已本地保存');
   await page.reload();
-  await page.getByRole('button', { name: '打开版本侧边栏', exact: true }).click();
+  await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
   await page.locator(`.version-item[data-version-id="${versionId}"]`).click();
   await assertVisibleMapping(page);
 
@@ -195,8 +195,9 @@ test('custom direct generation rewrites source draft in a separate stage and pre
   await assertVisibleMapping(page);
   await expect(page.locator('.match-page')).not.toContainText(invalidQuote);
   await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
+  await page.getByRole('button', { name: '备份与恢复', exact: true }).click();
   const downloaded = page.waitForEvent('download');
-  await page.getByRole('button', { name: '下载全部版本备份', exact: true }).click();
+  await page.getByRole('dialog', { name: '简历备份与恢复' }).getByRole('button', { name: '下载全部版本备份', exact: true }).click();
   const backup = JSON.parse(await downloadedText(await downloaded));
   expect(backup.versions[0].report.requirements[0].resumeEvidence).toEqual([{ sourceQuote, sourceType: 'text', resumePath, resumeQuote }]);
   const savedResume = backup.versions[0].resume;
@@ -244,7 +245,7 @@ test('failure in the dedicated rewrite stage keeps both inputs and never saves t
   await expect(page.locator('.resume-paper')).toHaveCount(0);
   await expect(page.locator('.version-item')).toHaveCount(0);
   await page.reload();
-  await page.getByRole('button', { name: '打开版本侧边栏', exact: true }).click();
+  await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
   await expect(page.locator('.version-item')).toHaveCount(0);
   expect(directCalls).toBe(2);
   expect(backendCalls).toBe(0);

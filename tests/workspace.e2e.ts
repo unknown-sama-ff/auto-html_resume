@@ -61,7 +61,7 @@ test('versions switch actual content, preserve separate undo/history, and reload
   await page.getByRole('button',{name:'岗位匹配',exact:true}).click();await expect(page.locator('.match-page')).toContainText('项目使用Python');
   await page.getByRole('button',{name:'修改历史',exact:true}).click();await expect(page.locator('.history-list')).toContainText('修改姓名');
   await page.getByRole('button',{name:'恢复到此修改之后'}).first().click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨（第二版）');
-  await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();await page.locator(`.version-item[data-version-id="${second}"]`).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨（第二版）');expect(errors).toEqual([]);
+  await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();await page.locator(`.version-item[data-version-id="${second}"]`).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨（第二版）');expect(errors).toEqual([]);
 });
 
 test('sidebar, zoom, full screen, exports and selection are real controls',async({page})=>{
@@ -226,16 +226,15 @@ test('custom connection failure preserves materials and never falls back to the 
   await expect(page.getByRole('alert')).toContainText('CORS');await expect(page.getByRole('alert')).toContainText('不会自动转发');await expect(page.locator('.intake-card textarea').first()).toHaveValue('保留的个人资料');expect(backendRequests).toBe(0);await expect(page.locator('.resume-paper')).toHaveCount(0);
 });
 
-test('home opens the saved-version sidebar directly without a separate continue-editing button',async({page})=>{
+test('home 我的简历 opens the most recently edited version without a separate continue-editing button',async({page})=>{
   await page.goto('/');await generate(page);
   const versionId=await page.locator('.version-select').inputValue();
   await page.getByRole('button',{name:'工具介绍 / 新建简历',exact:true}).click();
   await expect(page.locator('.landing-hero')).toBeVisible();
   await expect(page.locator('main')).toHaveCount(1);
   await expect(page.getByRole('button',{name:'继续编辑已保存版本'})).toHaveCount(0);
-  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
-  await expect(page.locator('.side-rail .version-list')).toBeVisible();
-  await page.locator(`.version-item[data-version-id="${versionId}"]`).click();
+  await page.locator('.home-versions-button').click();
+  await expect(page.locator('.version-select')).toHaveValue(versionId);
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
 });
 
@@ -259,7 +258,7 @@ test('saved version seeds a new role resume after reload while keeping versions 
   const firstId=await page.locator('.version-select').inputValue();
 
   await page.reload();
-  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await page.locator(`.version-item[data-version-id="${firstId}"]`).click();
   await page.getByRole('button',{name:'基于当前版本创建岗位简历',exact:true}).click();
   await expect(page.locator('.new-role-guide h1')).toHaveText('为新岗位创建简历');
@@ -306,7 +305,7 @@ test('older saved versions without source materials still show editable personal
   await expect(page.locator('.save-state')).toHaveText('已本地保存');
   const originalId=await page.locator('.version-select').inputValue();
   await page.reload();
-  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await page.locator(`.version-item[data-version-id="${originalId}"]`).click();
   await page.getByRole('button',{name:'基于当前版本创建岗位简历',exact:true}).click();
   await expect(page.locator('.new-role-guide h1')).toHaveText('为新岗位创建简历');
@@ -339,7 +338,7 @@ test('version deletion requires confirmation, keeps other versions, and persists
   await expect(page.locator('.version-item')).toHaveCount(1);
   await expect(page.locator('.version-select')).toHaveValue(copyId);
   await expect(page.locator('.save-state')).toHaveText('已本地保存');
-  await page.reload();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.reload();await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await expect(page.locator(`.version-item[data-version-id="${originalId}"]`)).toHaveCount(0);
   await page.locator(`.version-item[data-version-id="${copyId}"]`).click();
   await expect(page.locator('input[aria-label="版本名称"]')).toHaveValue('要保留的副本');
@@ -359,11 +358,23 @@ test('deleting the active and last version selects a survivor then returns to em
 
 test('saved versions can be opened and deleted from the home sidebar on a phone',async({page})=>{
   await page.setViewportSize({width:390,height:844});await page.goto('/');await generate(page);const id=await page.locator('.version-select').inputValue();
-  await page.getByRole('button',{name:'工具介绍 / 新建简历',exact:true}).click();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
-  await expect(page.locator('.version-item')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
-  await page.locator(`.version-item[data-version-id="${id}"]`).click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();await page.getByRole('button',{name:'工具介绍 / 新建简历',exact:true}).click();
+  await page.locator('.home-versions-button').click();await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
   await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();await page.locator(`.version-row[data-version-id="${id}"]`).getByRole('button',{name:/删除版本/}).click();
   await page.getByRole('alertdialog',{name:'删除简历版本'}).getByRole('button',{name:'确认删除'}).click();await expect(page.locator('.landing-hero')).toBeVisible();
+});
+
+test('home 我的简历 opens the most recently edited saved version',async({page})=>{
+  await page.goto('/');await generate(page,'第一版');
+  const first=await page.locator('.version-select').inputValue();
+  await page.waitForTimeout(10);
+  await page.getByRole('button',{name:'复制当前版本',exact:true}).click();
+  const second=await page.locator('.version-select').inputValue();expect(second).not.toBe(first);
+  await page.locator('.version-select').selectOption(first);
+  await page.getByRole('button',{name:'工具介绍 / 新建简历',exact:true}).click();
+  await page.locator('.home-versions-button').click();
+  await expect(page.locator('.version-select')).toHaveValue(second);await expect(page.locator('.resume-paper h1')).toHaveText('第一版');
 });
 
 test('Escape cancels deletion and a late AI edit cannot restore a removed version',async({page})=>{

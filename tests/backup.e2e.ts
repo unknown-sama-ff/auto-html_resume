@@ -95,7 +95,7 @@ test('downloaded backup previews and restores all versions without replacing cur
     expect(copy?.history).toEqual(source.history);
     expect(copy?.messages).toEqual(source.messages);
   }
-  await page.reload();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.reload();await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await expect(page.locator('.version-item')).toHaveCount(4);
   await page.locator(`.version-item[data-version-id="${originalId}"]`).click();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨（当前修改保留）');
@@ -116,7 +116,7 @@ test('invalid backup shows an actionable error and leaves the saved workspace in
   }
   await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
-  await page.reload();await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.reload();await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await expect(page.locator('.version-item')).toHaveCount(1);
   await page.locator(`.version-item[data-version-id="${current.activeVersionId}"]`).click();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨');
@@ -232,7 +232,7 @@ test('storage read failure pauses saving and retry recovers the existing resume 
   expect(await savedWorkspace(page)).toEqual(current);
   await retry.click();
   await expect(failureHeading).toHaveCount(0);
-  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await expect(page.locator('.version-item')).toHaveCount(1);
   await page.locator(`.version-item[data-version-id="${current.activeVersionId}"]`).click();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨（读取失败前已保存）');
@@ -266,7 +266,7 @@ test('reload recovers newer fallback edits instead of reverting to the older Ind
   expect(fallback.versions[0].resume.name).toBe('张雨（备用存储的新资料）');
   expect(fallback.versions[0].history).toHaveLength(original.versions[0].history.length+1);
   await page.reload();
-  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   await expect(page.locator('.version-item')).toHaveCount(1);
   await page.locator(`.version-item[data-version-id="${original.activeVersionId}"]`).click();
   await expect(page.locator('.resume-paper h1')).toHaveText('张雨（备用存储的新资料）');
@@ -285,7 +285,7 @@ test('phone keeps home and sidebar backup entry points accessible and the new ro
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
   await dialog.getByRole('button',{name:'关闭备份与恢复',exact:true}).click();
   await expect(headerEntry).toBeFocused();
-  await page.getByRole('button',{name:'打开版本侧边栏',exact:true}).click();
+  await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
   const sidebarEntry=page.locator('.side-rail').getByRole('button',{name:'备份与恢复',exact:true});
   await expect(sidebarEntry).toBeVisible();await sidebarEntry.click();
   await expect(dialog).toBeVisible();await dialog.getByRole('button',{name:'下载备份',exact:true}).click();
