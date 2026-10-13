@@ -88,6 +88,17 @@ test('phone viewport keeps both export actions available without horizontal page
   await page.setViewportSize({width:390,height:844});await page.goto('/');await generate(page);await expect(page.getByRole('button',{name:'导出 HTML',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'导出 PDF',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
 });
 
+test('collapsed mobile rail keeps only the sidebar toggle control',async({page})=>{
+  await page.setViewportSize({width:390,height:844});await page.goto('/');
+  const rail=page.locator('.side-rail');
+  await expect(rail.locator('.sidebar-toggle')).toBeVisible();
+  await expect(rail.locator('.brand-lockup')).toBeHidden();
+  await expect(rail.locator('.rail-nav')).toBeHidden();
+  await expect(rail.locator('.version-block')).toBeHidden();
+  await expect(rail.locator('.sidebar-toggle')).toHaveCSS('width','44px');
+  await expect(rail.locator('.sidebar-toggle')).toHaveCSS('height','44px');
+});
+
 test('PDF extraction runs in browser and its contents reach the generator',async({page})=>{
   const {textPdf}=await import('./pdf-fixture');let profile='';await page.route('**/api/ai/generate',route=>{profile=route.request().postDataJSON().profileText;return route.fulfill({json:makeResult()});});
   await page.goto('/');await page.getByLabel('上传个人资料文件').setInputFiles({name:'candidate.pdf',mimeType:'application/pdf',buffer:textPdf('Candidate Zhang: Python and SQL project')});
