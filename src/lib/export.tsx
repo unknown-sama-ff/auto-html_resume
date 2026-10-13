@@ -14,11 +14,16 @@ export function printResume(resume:ResumeData):Promise<void> {
     const timeout=window.setTimeout(()=>{frame.remove();reject(new Error('打印预览加载超时，请重试。'));},20000);
     frame.onload=async()=>{
       if(!frame.contentWindow || !frame.contentDocument)return;
-      await frame.contentDocument.fonts.ready;
-      await Promise.all([...frame.contentDocument.images].map(image=>image.complete?Promise.resolve():new Promise<void>(r=>{image.onload=()=>r();image.onerror=()=>r();})));
+      const assetsReady=Promise.all([
+        frame.contentDocument.fonts?.ready ?? Promise.resolve(),
+        Promise.all([...frame.contentDocument.images].map(image=>image.complete?Promise.resolve():new Promise<void>(r=>{image.onload=()=>r();image.onerror=()=>r();}))),
+      ]);
+      await Promise.race([assetsReady,new Promise<void>(resolve=>window.setTimeout(resolve,2000))]);
       window.clearTimeout(timeout);
       frame.contentWindow.onafterprint=()=>frame.remove();
-      frame.contentWindow.focus();frame.contentWindow.print();resolve();
+      frame.contentWindow.focus();
+      window.setTimeout(()=>{try{frame.contentWindow?.print();}catch{/* The browser may reject printing after the frame is closed. */}},0);
+      resolve();
       // afterprint may not fire if the print dialog is cancelled by the browser.
       window.setTimeout(()=>frame.remove(),120000);
     };

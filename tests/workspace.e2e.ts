@@ -131,6 +131,7 @@ test('AI local patch is confirmed, undoable, and only contains selected context'
 });
 
 test('exported HTML matches the styled preview and PDF prints that same standalone document',async({page})=>{
+  await page.route('**/assets/export-*.js', route => route.abort());
   await page.goto('/');await generate(page);await page.locator('.resume-paper h1').click();await page.getByRole('button',{name:'选择颜色 #315A64'}).click();
   const file=page.waitForEvent('download');await page.getByRole('button',{name:'导出 HTML',exact:true}).click();const download=await file;const fs=await import('node:fs/promises');const html=await fs.readFile((await download.path())!,'utf8');expect(html).toContain('张雨');expect(html).toContain('电商数据分析');expect(html).toContain('#315A64');expect(html.split('</style>')[1]).not.toContain('is-selected');expect(html).not.toContain('@import');expect(html).not.toContain('<script');
   await page.addInitScript(()=>{window.print=()=>{document.documentElement.dataset.printCalled='yes';};});

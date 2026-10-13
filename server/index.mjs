@@ -183,8 +183,23 @@ app.post('/api/ai/edit', async (request,response)=>{
 app.use((error,_request,response,_next)=>response.status(error.type==='entity.too.large'?413:400).json({error:error.type==='entity.too.large'?'资料过大，请减少文件大小。':'请求无效，请检查材料与网站来源。'}));
 
 if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir));
-  app.get(/^(?!\/api).*/, (_request, response) => response.sendFile(path.join(distDir, 'index.html')));
+  app.use(express.static(distDir, {
+    setHeaders(response, filePath) {
+      if (filePath.endsWith('.html')) {
+        response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        response.setHeader('Pragma', 'no-cache');
+        response.setHeader('Expires', '0');
+      } else if (/[\\/]assets[\\/]/.test(filePath)) {
+        response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+  app.get(/^(?!\/api).*/, (_request, response) => {
+    response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.setHeader('Pragma', 'no-cache');
+    response.setHeader('Expires', '0');
+    return response.sendFile(path.join(distDir, 'index.html'));
+  });
 }
 
 app.listen(port, () => console.log(`easy-resume server listening on ${port}`));
