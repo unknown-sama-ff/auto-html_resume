@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { openVersionSidebar } from './sidebar';
+import { keyboardMoveSection, type DragDirection } from './drag';
 import { initialResume } from '../src/data';
 import { RESUME_TEMPLATES } from '../shared/design';
 
@@ -82,12 +83,8 @@ test('portfolio keyboard drag moves between the main area and stacked support in
   await createResume(page);
   await page.locator('.workspace-design').getByRole('button',{name:/作品展示/}).click();
   const main=page.locator('.resume-main-sections'),support=page.locator('.resume-support-grid');
-  async function move(label:string,direction:string){
-    const handle=page.getByRole('button',{name:'拖动栏目 '+label,exact:true});
-    await handle.scrollIntoViewIfNeeded();await handle.hover();await handle.focus();
-    const overlay=page.locator('.section-drag-overlay').filter({hasText:label});
-    await page.keyboard.press('Space');await expect(overlay).toBeVisible();
-    await page.keyboard.press(direction);await page.keyboard.press('Space');await expect(overlay).toBeHidden();
+  async function move(label:string,direction:DragDirection){
+    await keyboardMoveSection(page,label,direction);
   }
   async function undo(){await page.locator('.preview-toolbar').getByRole('button',{name:'撤销',exact:true}).click();}
   await move('项目经历','ArrowRight');
@@ -114,12 +111,8 @@ test('campus supports left/right keyboard moves including an empty side column',
   await page.locator('.workspace-design').getByRole('button',{name:/校园新锐/}).click();
   const main=page.locator('.resume-main-column, .resume-main-sections').last();
   const side=page.locator('.resume-side-column, .resume-side-sections').last();
-  async function move(label:string,direction:string){
-    const handle=page.getByRole('button',{name:'拖动栏目 '+label,exact:true});
-    await handle.scrollIntoViewIfNeeded();await handle.hover();await handle.focus();
-    const overlay=page.locator('.section-drag-overlay').filter({hasText:label});
-    await page.keyboard.press('Space');await expect(overlay).toBeVisible();
-    await page.keyboard.press(direction);await page.keyboard.press('Space');await expect(overlay).toBeHidden();
+  async function move(label:string,direction:DragDirection){
+    await keyboardMoveSection(page,label,direction);
   }
   await expect(side.locator('[data-section]')).toHaveCount(0);
   await move('项目经历','ArrowLeft');
@@ -138,9 +131,7 @@ test('new template cards uses the same conventional left/right column navigation
   await createResume(page);await page.locator('.workspace-design').getByRole('button',{name:/信息卡片/}).click();
   const main=page.locator('.resume-main-column, .resume-main-sections').last();
   const side=page.locator('.resume-side-column, .resume-side-sections').last();
-  const handle=page.getByRole('button',{name:'拖动栏目 项目经历',exact:true});await handle.scrollIntoViewIfNeeded();await handle.hover();await handle.focus();
-  const overlay=page.locator('.section-drag-overlay').filter({hasText:'项目经历'});
-  await page.keyboard.press('Space');await expect(overlay).toBeVisible();await page.keyboard.press('ArrowRight');await page.keyboard.press('Space');await expect(overlay).toBeHidden();
+  await keyboardMoveSection(page,'项目经历','ArrowRight');
   await expect(side.locator('[data-section="projects"]')).toHaveCount(1);await expect(main.locator('[data-section="projects"]')).toHaveCount(0);
 });
 
