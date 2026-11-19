@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { openVersionSidebar } from './sidebar';
+import { keyboardMoveSection } from './drag';
 import { initialResume } from '../src/data';
 import { readFile } from 'node:fs/promises';
 
@@ -90,8 +91,8 @@ test('mouse drag moves a module between template columns and keyboard drag reord
   await page.mouse.move(end!.x + end!.width / 2, end!.y + 8, { steps: 15 }); await page.mouse.up();
   await expect(page.locator('.resume-main-column [data-section="skills"]')).toHaveCount(1);
   const beforeOrder = await page.locator('.resume-main-column > [data-section]').evaluateAll(elements => elements.map(element => element.getAttribute('data-section')));
-  await page.locator('[data-section="skills"]').hover(); await handle.focus();
-  await page.keyboard.press('Space'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Space');
+  expect(beforeOrder.indexOf('skills')).toBeLessThan(beforeOrder.length - 1);
+  await keyboardMoveSection(page, '核心技能', 'ArrowDown');
   await expect(page.locator('.resume-main-column [data-section="skills"]')).toHaveCount(1);
   const afterOrder = await page.locator('.resume-main-column > [data-section]').evaluateAll(elements => elements.map(element => element.getAttribute('data-section')));
   expect(afterOrder).not.toEqual(beforeOrder);
