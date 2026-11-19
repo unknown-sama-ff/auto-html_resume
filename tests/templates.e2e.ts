@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openVersionSidebar } from './sidebar';
 import { initialResume } from '../src/data';
 import { RESUME_TEMPLATES } from '../shared/design';
 
@@ -39,7 +40,7 @@ test('all templates retain selection, facts, undo, duplication and local persist
   }
   await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-2)!.id);
   await page.getByRole('button',{name:'重做',exact:true}).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-1)!.id);
-  await page.getByRole('button',{name:'复制当前版本'}).click();const id=await page.locator('.version-select').inputValue();await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await page.getByRole('button',{name:'展开侧边栏'}).click();await page.locator(`.version-item[data-version-id="${id}"]`).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-1)!.id);
+  await page.getByRole('button',{name:'复制当前版本'}).click();const id=await page.locator('.version-select').inputValue();await expect(page.locator('.save-state')).toContainText('已本地保存');await page.reload();await openVersionSidebar(page);await page.locator(`.version-item[data-version-id="${id}"]`).click();await expect(page.locator('.resume-paper')).toHaveAttribute('data-template',RESUME_TEMPLATES.at(-1)!.id);
 });
 
 test('page design suggestions preview before confirmation and send only selected design context',async({page})=>{

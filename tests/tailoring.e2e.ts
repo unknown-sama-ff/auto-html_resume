@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Download } from '@playwright/test';
+import { openVersionSidebar } from './sidebar';
 import { initialResume } from '../src/data';
 
 const sourceQuote = '使用 Python 清洗销售数据，按用户群体统计复购情况，制作每周经营汇报。';
@@ -129,7 +130,7 @@ test('preset tailoring maps a requirement to its source and rewritten resume, pe
   await assertVisibleMapping(page);
   await expect(page.locator('.save-state')).toContainText('已本地保存');
   await page.reload();
-  await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
+  await openVersionSidebar(page);
   await page.locator(`.version-item[data-version-id="${versionId}"]`).click();
   await assertVisibleMapping(page);
 
@@ -194,7 +195,7 @@ test('custom direct generation rewrites source draft in a separate stage and pre
   await expect(page.locator('.resume-paper')).not.toContainText(sourceQuote);
   await assertVisibleMapping(page);
   await expect(page.locator('.match-page')).not.toContainText(invalidQuote);
-  await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
+  await openVersionSidebar(page);
   await page.getByRole('button', { name: '备份与恢复', exact: true }).click();
   const downloaded = page.waitForEvent('download');
   await page.getByRole('dialog', { name: '简历备份与恢复' }).getByRole('button', { name: '下载全部版本备份', exact: true }).click();
@@ -245,7 +246,7 @@ test('failure in the dedicated rewrite stage keeps both inputs and never saves t
   await expect(page.locator('.resume-paper')).toHaveCount(0);
   await expect(page.locator('.version-item')).toHaveCount(0);
   await page.reload();
-  await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
+  await openVersionSidebar(page);
   await expect(page.locator('.version-item')).toHaveCount(0);
   expect(directCalls).toBe(2);
   expect(backendCalls).toBe(0);
