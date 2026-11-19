@@ -77,9 +77,10 @@ export function ResumePreview({ resume, selectedNodeId = '', onSelect, scale = 1
       }
     }
     if (!target) return currentCoordinates;
+    // 方向键可能早于 droppable 量测完成：先记下逻辑目标，落点才不会退回原位置。
+    keyboardTarget.current = target;
     const targetRect = context.droppableRects.get(target), collisionRect = context.collisionRect;
     if (!targetRect || !collisionRect) return currentCoordinates;
-    keyboardTarget.current = target;
     // Center the overlay on the logical target; scaled parent rectangles cannot become a false next sibling.
     return { x: targetRect.left + (targetRect.width - collisionRect.width) / 2, y: targetRect.top + (targetRect.height - collisionRect.height) / 2 };
   };
