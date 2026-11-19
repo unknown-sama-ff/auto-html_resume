@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openVersionSidebar } from './sidebar';
 import { initialResume } from '../src/data';
 import { readFile } from 'node:fs/promises';
 
@@ -68,7 +69,7 @@ test('custom sections are obvious, editable, reorderable, removable and recovera
   await expect(page.locator('.resume-paper')).toContainText('日语 N1');
   const version = await page.locator('.version-select').inputValue();
   await expect(page.locator('.save-state')).toContainText('已本地保存');
-  await page.reload(); await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
+  await page.reload(); await openVersionSidebar(page);
   await page.locator('.version-item[data-version-id="' + version + '"]').click();
   await expect(page.locator('.resume-paper')).toContainText('日语 N1');
   const html = await download(page);

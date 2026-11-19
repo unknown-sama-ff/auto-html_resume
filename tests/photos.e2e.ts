@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openVersionSidebar } from './sidebar';
 import { readFile } from 'node:fs/promises';
 import { initialResume } from '../src/data';
 import type { GenerationResult } from '../src/types';
@@ -118,7 +119,7 @@ test('home accepts a real PNG over 2 MB, compresses locally, and excludes the av
   expect(JSON.stringify(editPayload)).not.toContain(source); expect(editPayload).not.toHaveProperty('resume');
   await expect(page.locator('.save-state')).toContainText('已本地保存');
   const versionId = await page.locator('.version-select').inputValue();
-  await page.reload(); await page.getByRole('button', { name: '展开侧边栏', exact: true }).click();
+  await page.reload(); await openVersionSidebar(page);
   await page.locator('.version-item[data-version-id="' + versionId + '"]').click();
   await expect(page.getByAltText('个人头像')).toHaveAttribute('src', source);
 });
